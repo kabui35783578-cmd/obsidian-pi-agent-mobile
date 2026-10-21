@@ -19,6 +19,8 @@ Android / iPhone 上的 Obsidian 交互插件：手机聊天，电脑执行模�
 
 只需安装 Release 中的 `main.js`、`manifest.json`、`styles.css`，由 BRAT 自动处理。不需要下载源码、Node、Pi SDK 或配置账号。默认头像已内嵌，独立 ID `pi-agent-mobile` 不覆盖电脑插件 `pi-agent`。
 
+如果手机通过同步已经装有旧的 **Pi Agent**，请先在手机停用旧插件，再启用 **Pi Agent Mobile**，避免两个手机入口重复注册。电脑端继续使用原来的 Pi Agent。
+
 ## 可以测试什么
 
 - 助手通讯录、手机发消息、流式回复、停止任务。
