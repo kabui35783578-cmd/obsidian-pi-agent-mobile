@@ -1,0 +1,25 @@
+name: Release mobile beta
+on:
+  push:
+    tags: ['*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run verify
+      - name: Check version tag
+        run: node -e 'if(process.env.GITHUB_REF_NAME !== JSON.parse(require("fs").readFileSync("manifest.json")).version) process.exit(1)'
+      - name: Publish BRAT assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum main.js manifest.json styles.css > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" main.js manifest.json styles.css SHA256SUMS.txt --title "$GITHUB_REF_NAME" --prerelease --notes-file RELEASE.md
