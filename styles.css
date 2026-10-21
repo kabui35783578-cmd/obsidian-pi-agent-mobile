@@ -1329,6 +1329,19 @@
   min-width: 230px;
   max-width: 100%;
 }
+.pi-prompt-settings .setting-item:has(textarea) {
+  display: block;
+}
+.pi-prompt-settings .setting-item:has(textarea) .setting-item-control {
+  margin-top: 10px;
+  display: block;
+}
+.pi-prompt-settings textarea {
+  width: 100%;
+  min-height: 130px;
+  resize: vertical;
+  line-height: 1.6;
+}
 .pi-capability-options {
   margin: 18px 0;
 }
@@ -1932,170 +1945,636 @@
     min-height: 260px;
   }
 }
-/* Phone companion: one conversation at a time, with a contact drawer. */
+/* Phone companion (source: src/mobile/mobile.css). */
+/* Phone UI: open roster, soft round controls, compact conversational rhythm. */
+/* Only the active phone workspace takes over chrome. Never change global
+   safe-area or keyboard variables: Obsidian still owns the native viewport. */
+body.is-mobile.pi-phone-active {
+  --navbar-height: 0px;
+  --navbar-bottom-offset: 0px;
+  --mobile-toolbar-height: 0px;
+  --view-top-spacing: 0px;
+  --view-bottom-spacing: 0px;
+}
+body.is-mobile.pi-phone-active .mobile-navbar,
+body.is-mobile.pi-phone-active .mobile-toolbar,
+body.is-mobile.pi-phone-active .workspace-ribbon,
+body.is-mobile.pi-phone-active .mod-root .workspace-tab-header-container,
+body.is-mobile.pi-phone-active .mod-root .view-header,
+body.is-mobile.pi-phone-active .status-bar {
+  display: none !important;
+}
+body.is-mobile.pi-phone-active
+  .workspace-leaf-content[data-type="pi-agent-mobile-chat"] {
+  --view-top-spacing: 0px;
+  --view-bottom-spacing: 0px;
+  padding: 0 !important;
+  overflow: hidden;
+}
+body.is-mobile.pi-phone-active .pi-phone-view {
+  margin: 0 !important;
+  height: 100%;
+}
+body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
+  padding-bottom: max(
+    10px,
+    calc(
+      var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) -
+        var(--keyboard-height, 0px)
+    )
+  );
+}
+.workspace-leaf-content[data-type="pi-agent-mobile-chat"] > .view-header {
+  display: none;
+}
 .pi-phone-view {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   padding: 0 !important;
+  background: var(--pi-canvas);
+  color: var(--pi-ink);
+  font-family: var(--font-interface);
+  container-type: inline-size;
 }
-.pi-phone-header {
+.pi-phone-view [hidden] {
+  display: none !important;
+}
+.pi-phone-view .pi-phone-header {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
+  gap: 8px;
+  min-height: 68px;
+  padding: 10px 16px;
+  border: 0;
+  background: var(--pi-canvas);
 }
-.pi-phone-header .pi-agent-avatar {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
+.pi-phone-view.is-home .pi-phone-header {
+  min-height: 82px;
+  padding-top: 14px;
 }
-.pi-phone-header .pi-phone-identity {
+.pi-phone-header-space {
   flex: 1;
   min-width: 0;
+}
+.pi-phone-view button.pi-phone-round,
+.pi-phone-view button.pi-phone-identity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pi-canvas);
+  color: var(--pi-ink);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--pi-ink) 7%, transparent);
+  transition:
+    transform 130ms ease-out,
+    background 130ms ease-out;
+}
+.pi-phone-view button.pi-phone-round:active,
+.pi-phone-view button.pi-phone-identity:active,
+.pi-phone-view .pi-phone-favorite:active {
+  transform: scale(0.95);
+  background: var(--pi-bubble);
+}
+.pi-phone-view .pi-phone-round svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.8;
+}
+.pi-phone-view button.pi-phone-identity {
+  gap: 7px;
+  padding: 5px 12px 5px 6px;
+  width: auto;
+  height: 38px;
+  min-width: 0;
+  max-width: calc(100% - 112px);
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+.pi-phone-identity > span:last-child {
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
-  font-weight: 600;
 }
-.pi-phone-view .pi-icon-button {
-  min-width: 36px;
-  min-height: 40px;
-  flex-shrink: 0;
+.pi-phone-view .pi-phone-identity .pi-agent-avatar {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  background: transparent;
+  border-radius: 0;
+}
+.pi-phone-host {
+  position: relative;
+}
+.pi-phone-host.is-connected::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-green);
+  border: 2px solid var(--pi-canvas);
+  box-sizing: content-box;
 }
 .pi-phone-connection {
   flex: 0 0 auto;
-  padding: 7px 14px;
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
+  margin: 0 16px 6px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--pi-bubble);
+  font-size: 13px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 .pi-phone-connection.is-error {
-  color: var(--text-error);
+  color: var(--pi-ink);
 }
-.pi-phone-messages {
+.pi-phone-home {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 20px
+    max(20px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
+  overscroll-behavior: contain;
+}
+.pi-phone-home-search {
+  padding: 0 0 12px;
+}
+.pi-phone-home-search input[type="search"] {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  box-shadow: none;
+  background: var(--pi-bubble);
+  border-radius: 14px;
+  font-size: 16px;
+}
+.pi-phone-favorites {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 0 22px;
+}
+.pi-phone-view .pi-phone-favorite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: transform 130ms ease-out;
+}
+.pi-phone-favorite .pi-agent-avatar {
+  width: min(90px, 22cqw);
+  height: min(90px, 22cqw);
+  flex-basis: auto;
+  border-radius: 0;
+  background: transparent;
+}
+.pi-phone-favorite > span:last-child {
+  max-width: 100%;
+  font-size: 13px;
+  color: var(--pi-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-phone-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 2px;
+}
+.pi-phone-view .pi-phone-contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 78px;
+  height: auto;
+  padding: 10px 0;
+  text-align: left;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--pi-ink);
+  border-radius: 12px;
+}
+.pi-phone-view .pi-phone-contact:active {
+  background: var(--pi-bubble);
+}
+.pi-phone-contact > .pi-agent-avatar {
+  width: 45px;
+  height: 45px;
+  flex: 0 0 45px;
+  background: transparent;
+  border-radius: 0;
+}
+.pi-phone-contact-body {
+  flex: 1;
+  min-width: 0;
+}
+.pi-phone-contact-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pi-phone-contact-title strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-phone-contact-title time {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: var(--pi-secondary);
+  font-weight: 400;
+}
+.pi-phone-contact-preview {
+  margin-top: 5px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--pi-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pi-phone-list-label {
+  padding: 12px 0 0;
+  font-size: 13px;
+  color: var(--pi-secondary);
+}
+.pi-phone-empty {
+  padding: 36px 8px;
+  color: var(--pi-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+}
+.pi-phone-view .pi-phone-messages {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  padding: 14px 12px;
+  padding: 4px 16px 12px;
   overflow: auto;
   overscroll-behavior: contain;
 }
+.pi-phone-date {
+  margin: 5px 0 18px;
+  color: var(--pi-secondary);
+  font-size: 12px;
+  text-align: center;
+}
 .pi-phone-view .pi-message {
-  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  max-width: 88%;
+  min-width: 0;
+  margin: 0 0 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pi-ink);
+  border-radius: 0;
+}
+.pi-phone-view .pi-message-user {
+  margin-left: auto;
+  align-items: flex-end;
+}
+.pi-phone-view .pi-message-assistant {
+  margin-right: auto;
 }
 .pi-phone-view .pi-message-bubble {
-  max-width: 96%;
+  width: fit-content;
+  max-width: 100%;
+  padding: 9px 12px;
+  border-radius: 15px;
+  background: var(--pi-bubble);
+  color: var(--pi-ink);
   overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.5;
 }
 .pi-phone-view .pi-message-user .pi-message-bubble {
+  background: var(--pi-user-bubble);
+  color: var(--pi-user-ink);
   white-space: pre-wrap;
 }
+.pi-phone-view .pi-message-bubble p {
+  margin: 0 0 8px;
+  font-size: inherit;
+  line-height: inherit;
+}
+.pi-phone-view .pi-message-bubble p:last-child {
+  margin-bottom: 0;
+}
+.pi-phone-view .pi-message-bubble ul,
+.pi-phone-view .pi-message-bubble ol {
+  margin: 4px 0 0;
+  padding-inline-start: 19px;
+}
+.pi-phone-view .pi-message-bubble li {
+  margin-block: 0;
+}
+.pi-phone-view .pi-message-bubble p:has(+ ul),
+.pi-phone-view .pi-message-bubble p:has(+ ol) {
+  margin-bottom: 4px;
+}
+.pi-phone-view .pi-message-bubble code {
+  font-size: 0.9em;
+  word-break: break-word;
+}
+.pi-phone-view .pi-message-bubble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .pi-phone-view .pi-message-bubble pre {
-  overflow-x: auto;
   max-width: 100%;
+  overflow: auto;
+  white-space: pre;
+}
+.pi-phone-view .pi-message-bubble table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: 14px;
 }
 .pi-phone-view .pi-message-origin {
-  font-size: 10px;
-  opacity: 0.65;
-  margin: 0 6px 4px;
+  margin: 7px 5px 4px;
+  padding: 0;
+  color: var(--pi-secondary);
+  font-size: 12px;
+  opacity: 1;
+}
+.pi-phone-view .pi-phone-stream {
+  white-space: pre-wrap;
 }
 .pi-phone-view .pi-composer-dock {
   flex: 0 0 auto;
-  padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+  width: 100%;
+  padding: 8px 12px max(10px, env(safe-area-inset-bottom));
+  background: var(--pi-canvas);
 }
 .pi-phone-view .pi-chat-composer {
   width: 100%;
+  padding: 4px;
+  border: 1px solid var(--pi-border);
+  border-radius: 28px;
+  box-shadow: none;
 }
 .pi-phone-view .pi-composer-line {
+  display: flex;
   align-items: flex-end;
+  gap: 4px;
 }
 .pi-phone-view .pi-composer-line textarea {
-  font-size: 16px;
-  min-height: 42px;
-  max-height: 160px;
-  resize: none;
+  flex: 1;
+  min-width: 0;
   width: 100%;
+  min-height: 36px;
+  max-height: 128px;
+  margin: 0;
+  padding: 7px 1px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 22px;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  resize: none;
 }
-.pi-phone-view .pi-chat-status {
-  font-size: 10px;
-  text-align: center;
-  margin-top: 6px;
-  color: var(--text-muted);
+.pi-phone-view .pi-composer-line > .pi-icon-button {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 10px;
+  border-radius: 50%;
+}
+.pi-phone-view .pi-composer-line > .pi-icon-button:first-child {
+  background: var(--pi-canvas);
+  color: var(--pi-ink);
+  box-shadow: none;
+}
+.pi-phone-view button.pi-send-button {
+  background: var(--pi-ink);
+  color: var(--pi-canvas);
+}
+.pi-phone-view button.pi-send-button:disabled {
+  background: transparent;
+  color: var(--pi-secondary);
+  opacity: 0.55;
+}
+.pi-phone-view .pi-attachment-list:empty {
+  display: none;
+}
+.pi-phone-view .pi-attachment-list button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.pi-phone-view .pi-activity {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: var(--pi-secondary);
+}
+.pi-phone-view .pi-activity summary {
+  min-height: 44px;
+  padding-top: 12px;
+}
+.pi-phone-view .pi-activity > div {
+  padding: 7px 0;
+  overflow-wrap: anywhere;
 }
 .pi-phone-view .pi-delegation {
-  margin: 12px 0;
   max-width: 100%;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.pi-phone-view .pi-delegation-route {
+  flex-wrap: wrap;
 }
 .pi-phone-view .pi-delegation-task {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.pi-phone-view .pi-delegation-route {
-  flex-wrap: wrap;
+.pi-phone-result-status:empty {
+  display: none;
 }
-.pi-phone-view .pi-phone-stream {
-  white-space: pre-wrap;
+.pi-phone-result-status {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--pi-secondary);
 }
 .pi-phone-welcome {
-  margin: auto;
-  max-width: 340px;
-  padding: 48px 16px;
+  max-width: 320px;
+  margin: 12vh auto 0;
+  padding: 0 12px 30px;
   text-align: center;
-  color: var(--text-muted);
 }
-.pi-phone-welcome h2 {
-  color: var(--text-normal);
-  font-size: 24px;
-}
-.pi-phone-welcome button {
-  margin: 8px;
-}
-.pi-phone-contacts input[type="search"] {
-  width: 100%;
-  margin-bottom: 12px;
-}
-.pi-phone-contact {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  height: auto;
-  padding: 12px 8px;
-  text-align: left;
-  border: 0;
-  box-shadow: none;
+.pi-phone-welcome > .pi-agent-avatar {
+  display: inline-flex;
+  width: 84px;
+  height: 84px;
   background: transparent;
 }
-.pi-phone-contact.is-active {
-  background: var(--background-modifier-hover);
-  border-radius: 12px;
+.pi-phone-welcome h2 {
+  margin: 20px 0 8px;
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--pi-ink);
 }
-.pi-phone-contact > div {
-  min-width: 0;
+.pi-phone-welcome p {
+  font-size: 15px;
+  line-height: 1.6;
 }
-.pi-phone-contact .pi-muted {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 65vw;
-  font-size: var(--font-ui-small);
-  margin-top: 5px;
+.pi-phone-welcome button {
+  margin: 10px 5px;
+  min-height: 44px;
+  border-radius: 22px;
+  padding: 0 20px;
 }
 .pi-phone-note {
   overflow-wrap: anywhere;
 }
 .pi-phone-note pre {
-  overflow-x: auto;
+  overflow: auto;
 }
-.pi-phone-result-status {
+.pi-phone-contacts input[type="search"] {
+  width: 100%;
+  margin-bottom: 14px;
+  font-size: 16px;
+}
+.pi-phone-modal .pi-phone-contact {
+  min-height: 68px;
+  padding: 8px 0;
+}
+.pi-phone-modal .pi-phone-contact > div {
+  min-width: 0;
+}
+.pi-phone-modal .pi-phone-contact .pi-muted {
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-phone-modal .pi-agent-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+}
+.pi-phone-settings {
+  max-width: 640px;
+}
+.pi-phone-settings h2 {
+  margin-bottom: 24px;
+}
+.pi-phone-computer-card {
+  padding: 20px;
+  background: var(--background-secondary);
+  border-radius: 20px;
+}
+.pi-phone-computer-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.pi-phone-computer-status {
+  margin: 8px 0 18px;
+  font-size: 14px;
   color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  margin-top: 12px;
+}
+.pi-phone-computer-status::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.is-connected > .pi-phone-computer-status::before {
+  background: var(--color-green);
+}
+.pi-phone-setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pi-phone-settings button,
+.pi-phone-modal button {
+  min-height: 40px;
+  border-radius: 12px;
+}
+.pi-phone-view button.mod-cta,
+.pi-phone-settings button.mod-cta,
+.pi-phone-modal button.mod-cta {
+  background: var(--text-normal);
+  color: var(--background-primary);
+}
+.pi-phone-setting-details {
+  padding: 18px 0;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.pi-phone-setting-details summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+}
+.pi-phone-setting-details p,
+.pi-phone-modal p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.pi-phone-endpoint {
+  overflow-wrap: anywhere;
+  font-family: var(--font-monospace);
+  color: var(--text-muted);
+}
+.pi-phone-modal textarea {
+  width: 100%;
+  min-height: 110px;
+  font-size: 16px;
+}
+.pi-phone-settings .setting-item,
+.pi-phone-modal .setting-item {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pi-phone-settings .setting-item-control,
+.pi-phone-modal .setting-item-control {
+  flex-wrap: wrap;
+}
+.pi-phone-modal .pi-history-row {
+  gap: 8px;
+}
+.pi-phone-modal .pi-history-open {
+  min-width: 0;
+}
+.pi-phone-modal .pi-history-archive {
+  flex-shrink: 0;
 }
 .pi-pair-output {
   display: flex;
@@ -2112,20 +2591,43 @@
   font-family: var(--font-monospace);
   font-size: var(--font-ui-smaller);
 }
-@media (max-width: 420px) {
-  .pi-phone-header {
-    gap: 2px;
+@keyframes pi-phone-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
   }
-  .pi-phone-header .pi-agent-avatar {
-    width: 24px;
-    height: 24px;
-    flex-basis: 24px;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-  .pi-phone-header .pi-icon-button {
-    min-width: 32px;
-    padding: 5px;
+}
+.pi-phone-favorites {
+  animation: pi-phone-enter 220ms ease-out both;
+}
+.pi-phone-home:not([hidden]),
+.pi-phone-messages:not([hidden]) {
+  animation: pi-phone-enter 170ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pi-phone-view *,
+  .pi-phone-view *::before,
+  .pi-phone-view *::after {
+    animation: none !important;
+    transition: none !important;
   }
-  .pi-phone-view .pi-message-bubble {
-    padding: 10px 12px;
+}
+@media (max-width: 350px) {
+  .pi-phone-view .pi-phone-header {
+    padding-inline: 10px;
+    gap: 5px;
+  }
+  .pi-phone-home {
+    padding-inline: 14px;
+  }
+  .pi-phone-favorites {
+    gap: 6px;
+  }
+  .pi-phone-view .pi-phone-messages {
+    padding-inline: 12px;
   }
 }

@@ -10,6 +10,7 @@ export interface AgentDefinition {
   prompt: string;
   model: string;
   skills: string[];
+  builtinSkills?: boolean;
   mcpTools: string[];
 }
 export interface AgentRecord extends AgentDefinition {
@@ -27,6 +28,10 @@ export interface ApiProviderConfig {
 export interface McpServerConfig {
   id: string;
   name: string;
+  purpose?: string;
+  capabilities?: string;
+  target?: string;
+  targetVault?: string;
   transport: "stdio" | "http";
   command?: string;
   args?: string[];
@@ -36,6 +41,8 @@ export interface McpServerConfig {
   scope?: string;
 }
 export interface PluginSettings {
+  agentPrompts?: Record<string, string>;
+  systemPrompts?: import("./prompts.ts").SystemPrompts;
   mobileRemote: { enabled: boolean; port: number };
   agentPermissions: Record<string, AgentPermissions>;
   model: string;
@@ -118,6 +125,12 @@ export interface ConnectionStatus {
   detail: string;
 }
 export interface VaultToolArgs {
+  offset?: number;
+  lineOffset?: number;
+  mode?: "path" | "content" | "both";
+  date?: string;
+  status?: "open" | "done" | "all";
+  category?: "work" | "all";
   path?: string;
   query?: string;
   content?: string;

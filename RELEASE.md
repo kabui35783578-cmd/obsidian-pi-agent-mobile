@@ -1,9 +1,12 @@
-手机交互端首个 BRAT 测试版（Android / iPhone）。
+手机界面 0.2.0 测试版（Android / iPhone）。
 
-- 连接电脑 Pi Agent，支持通讯录、流式聊天、停止、委派记录、历史和归档。
-- 默认头像内嵌，BRAT 自动安装三个文件即可；独立插件 ID，不覆盖电脑版本。
-- 不包含电脑执行程序、Node、账号、个人数据。电脑保持运行，手机需同一局域网或已有 VPN。
+- 参考 Grokbot，首页改为大头像助手入口与会话列表，聊天页使用紧凑气泡和单行输入框。
+- 进入助手后隐藏 Obsidian 导航并回收占位；首页左上角菜单可返回 Obsidian 笔记，恢复原导航。
+- 设置聚焦电脑连接，排查与连接详情按需展开。
+- 保留聊天历史、委派、归档、草稿和失败重试；默认头像内嵌，BRAT 安装三个文件即可。
 
-安装：BRAT → Add Beta plugin → `kabui35783578-cmd/obsidian-pi-agent-mobile` → 选择 `0.1.0` → 启用 Pi Agent Mobile → 用电脑“手机连接”生成的配对码连接。
+安装或更新：BRAT → `kabui35783578-cmd/obsidian-pi-agent-mobile` → 选择 **0.2.0**。
 
-电脑端配套 Pi Agent 0.8.0；Obsidian 最低 1.11.4；建议 BRAT 最新版（至少 1.1.0）。尚待 Android/iPhone 真机往返测试，暂不作为稳定版或社区市场版本。
+已通过类型检查、三项手机入口测试，以及原生 Obsidian 隔离数据的 33 项 UI 流程检查（三次连续通过）。浅色、深色和窄屏已检查；截图为组件 DOM 重渲染，Android/iPhone 真机键盘与安全区仍需测试。
+
+Obsidian 最低 1.11.4。建议电脑端 Pi Agent 0.9.4，并保持电脑唤醒、Obsidian 打开。手机与电脑需连接同一局域网或 Tailscale 等已有 VPN。模型、Skills、MCP 和文件操作继续在电脑执行；升级不清理配对连接。本仓库不含电脑执行程序、账号、密钥或个人笔记。

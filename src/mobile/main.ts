@@ -6,6 +6,8 @@ import {
   Notice,
   requestUrl,
   TFile,
+  Platform,
+  type WorkspaceLeaf,
 } from "obsidian";
 import { MobileClient } from "./client.ts";
 import { MobileChatView, MOBILE_VIEW } from "./view.ts";
@@ -35,6 +37,26 @@ export default class MobilePlugin extends Plugin {
     return response.json;
   });
   lastNote?: TFile;
+  syncMobileChrome() {
+    const active =
+      (Platform.isMobile || document.body.classList.contains("is-mobile")) &&
+      this.app.workspace.activeLeaf?.view.getViewType() === MOBILE_VIEW;
+    document.body.classList.toggle("pi-phone-active", active);
+  }
+  async leaveChat() {
+    let target: WorkspaceLeaf | undefined;
+    this.app.workspace.iterateRootLeaves((leaf) => {
+      if (leaf.view.getViewType() !== MOBILE_VIEW) target ??= leaf;
+    });
+    if (!target) {
+      target = this.app.workspace.getLeaf("tab");
+      if (this.lastNote) await target.openFile(this.lastNote);
+      else await target.setViewState({ type: "empty", active: true });
+    }
+    await this.app.workspace.revealLeaf(target);
+    this.app.workspace.setActiveLeaf(target, { focus: true });
+    this.syncMobileChrome();
+  }
   async onload() {
     this.registerView(MOBILE_VIEW, (leaf) => new MobileChatView(leaf, this));
     this.addRibbonIcon(
@@ -53,6 +75,15 @@ export default class MobilePlugin extends Plugin {
       callback: () => new PairPhoneModal(this).open(),
     });
     this.addSettingTab(new PhoneSettings(this.app, this));
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () =>
+        this.syncMobileChrome(),
+      ),
+    );
+    this.registerEvent(
+      this.app.workspace.on("layout-change", () => this.syncMobileChrome()),
+    );
+    this.register(() => document.body.classList.remove("pi-phone-active"));
     this.registerObsidianProtocolHandler("pi-agent-pair", (params) => {
       if (params.code) new PairPhoneModal(this, params.code).open();
     });
@@ -76,6 +107,7 @@ export default class MobilePlugin extends Plugin {
     });
     this.register(() => this.client.close());
     this.app.workspace.onLayoutReady(() => {
+      this.syncMobileChrome();
       void this.restore().catch((error) => new Notice(String(error)));
     });
   }
@@ -139,6 +171,8 @@ export default class MobilePlugin extends Plugin {
       await leaf.setViewState({ type: MOBILE_VIEW, active: true });
     }
     await this.app.workspace.revealLeaf(leaf);
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
+    this.syncMobileChrome();
   }
   localKey(key: string) {
     return (
@@ -147,6 +181,10 @@ export default class MobilePlugin extends Plugin {
       ":" +
       key
     );
+  }
+  openSettings() {
+    (this.app as any).setting.open();
+    (this.app as any).setting.openTabById(this.manifest.id);
   }
 }
 
@@ -158,13 +196,18 @@ export class PairPhoneModal extends Modal {
     super(plugin.app);
   }
   onOpen() {
-    this.titleEl.setText("连接电脑上的 Pi Agent");
+    this.modalEl.addClass("pi-phone-modal");
+    this.titleEl.setText("连接我的电脑");
     this.contentEl.createEl("p", {
-      text: "在电脑「设置 → Pi Agent → 手机连接」启用并生成配对码。手机与电脑需在同一局域网，或通过已有 VPN 连通。",
+      text: "在电脑 Pi Agent 设置中打开「连接 → 手机连接」，生成配对码，再粘贴到下方。两台设备需连接同一 Wi-Fi，或都打开 Tailscale。",
     });
     let code = this.initial,
       name = "我的手机";
-    new Setting(this.contentEl).setName("设备名称").addText((text) =>
+    const advanced = this.contentEl.createEl("details", {
+      cls: "pi-phone-setting-details",
+    });
+    advanced.createEl("summary", { text: "手机名称" });
+    new Setting(advanced).setName("设备名称").addText((text) =>
       text.setValue(name).onChange((value) => {
         name = value;
       }),
@@ -177,9 +220,10 @@ export class PairPhoneModal extends Modal {
           code = value;
         }),
     );
+    this.contentEl.appendChild(advanced);
     this.contentEl.createEl("p", {
       cls: "pi-muted",
-      text: "配对后可使用此电脑所有助手的现有权限，包括总管获准的文件和终端操作。密钥保存在此手机库的 SecretStorage 中，账号仍留在电脑。请只连接自己的电脑。",
+      text: "只连接自己的电脑。配对后，手机可让助手按电脑上的现有权限处理文件、执行任务。",
     });
     const status = this.contentEl.createDiv({
       attr: { role: "status", "aria-live": "polite" },
@@ -206,7 +250,8 @@ export class PairPhoneModal extends Modal {
     );
   }
 }
-class PhoneSettings extends PluginSettingTab {
+export class PhoneSettings extends PluginSettingTab {
+  private unsubscribe?: () => void;
   constructor(
     app: any,
     private plugin: MobilePlugin,
@@ -214,47 +259,124 @@ class PhoneSettings extends PluginSettingTab {
     super(app, plugin);
   }
   display() {
+    this.unsubscribe?.();
     const el = this.containerEl;
     el.empty();
-    el.addClass("pi-settings");
-    el.createEl("h2", { text: "Pi Agent · 手机" });
-    el.createEl("p", { text: this.plugin.client.status });
+    el.addClass("pi-settings", "pi-phone-settings");
+    el.createEl("h2", { text: "设置" });
+    const card = el.createDiv({ cls: "pi-phone-computer-card" });
+    const title = card.createEl("h3", {
+      text: this.plugin.client.credential?.vaultName ?? "连接我的电脑",
+    });
+    const status = card.createEl("p", {
+      cls: "pi-phone-computer-status",
+      attr: { role: "status", "aria-live": "polite" },
+    });
+    const update = () => {
+      status.setText(this.plugin.client.status);
+      card.toggleClass("is-connected", this.plugin.client.connected);
+      title.setText(
+        this.plugin.client.description?.vaultName ??
+          this.plugin.client.credential?.vaultName ??
+          "连接我的电脑",
+      );
+      connect.setText(
+        this.plugin.client.connected
+          ? "打开助手"
+          : this.plugin.client.credential
+            ? "重新连接"
+            : "输入配对码",
+      );
+    };
+    const actions = card.createDiv({ cls: "pi-phone-setting-actions" });
+    const connect = actions.createEl("button", {
+      text: this.plugin.client.credential ? "重新连接" : "输入配对码",
+      cls: "mod-cta",
+    });
+    connect.addEventListener("click", async () => {
+      if (this.plugin.client.connected) {
+        (this.app as any).setting.close();
+        await this.plugin.openChat();
+        return;
+      }
+      if (!this.plugin.client.credential) {
+        new PairPhoneModal(this.plugin).open();
+        return;
+      }
+      connect.disabled = true;
+      try {
+        await this.plugin.client.connect(this.plugin.client.credential);
+        update();
+      } catch (error) {
+        new Notice(String(error));
+      } finally {
+        connect.disabled = false;
+      }
+    });
+    update();
+    this.unsubscribe = this.plugin.client.subscribe((event) => {
+      if (event.type === "connection") update();
+    });
     el.createEl("p", {
       cls: "pi-muted",
-      text: "手机负责交互，电脑负责模型、Skills、MCP、文件和命令。电脑关闭或休眠时无法执行任务。手机锁屏后暂停接收，回到前台后刷新；已提交任务继续在电脑执行。",
+      text: "手机聊天，电脑执行。电脑上的 Obsidian 需要保持打开。",
     });
-    new Setting(el)
-      .setName("电脑连接")
-      .setDesc(this.plugin.client.credential?.endpoint ?? "尚未配对")
+    const help = el.createEl("details", { cls: "pi-phone-setting-details" });
+    help.createEl("summary", { text: "连接不上？" });
+    help.createEl("p", {
+      text: "确认电脑未休眠、Obsidian 已打开；手机和电脑连接同一 Wi-Fi，或都打开 Tailscale。使用 Tailscale 时，电脑配对地址选择 100. 开头的地址。",
+    });
+    const details = el.createEl("details", { cls: "pi-phone-setting-details" });
+    details.createEl("summary", { text: "连接详情与移除" });
+    details.createEl("p", {
+      cls: "pi-phone-endpoint",
+      text: this.plugin.client.credential?.endpoint ?? "尚未配对电脑",
+    });
+    new Setting(details)
+      .setName("与电脑重新配对")
       .addButton((button) =>
         button
-          .setButtonText("扫码后粘贴配对码")
+          .setButtonText("输入新配对码")
           .onClick(() => new PairPhoneModal(this.plugin).open()),
       );
-    new Setting(el).setName("重新连接").addButton((button) =>
-      button.setButtonText("连接电脑").onClick(async () => {
-        try {
-          if (!this.plugin.client.credential) throw Error("请先配对电脑");
-          await this.plugin.client.connect(this.plugin.client.credential);
-          this.display();
-        } catch (error) {
-          new Notice(String(error));
-        }
-      }),
-    );
-    new Setting(el)
-      .setName("移除此手机的连接")
-      .setDesc("清除此库本机密钥；在电脑端撤销设备才会使所有旧密钥失效。")
+    new Setting(details)
+      .setName("移除这台电脑")
+      .setDesc("清除此手机的连接。要撤销设备权限，请在电脑上操作。")
       .addButton((button) =>
-        button.setButtonText("移除本机连接").onClick(() => {
-          this.plugin.forget();
-          this.display();
-        }),
+        button
+          .setButtonText("移除连接")
+          .setDisabled(!this.plugin.client.credential)
+          .onClick(() => {
+            const modal = new Modal(this.app);
+            modal.modalEl.addClass("pi-phone-modal");
+            modal.titleEl.setText("移除电脑连接？");
+            modal.contentEl.createEl("p", {
+              text: "聊天记录仍保留在电脑。下次使用需要重新配对。",
+            });
+            new Setting(modal.contentEl)
+              .addButton((b) =>
+                b.setButtonText("取消").onClick(() => modal.close()),
+              )
+              .addButton((b) =>
+                b
+                  .setButtonText("移除连接")
+                  .setWarning()
+                  .onClick(() => {
+                    this.plugin.forget();
+                    modal.close();
+                    this.display();
+                  }),
+              );
+            modal.open();
+          }),
       );
-    new Setting(el)
-      .setName("电脑配置")
-      .setDesc(
-        "模型账号、助手权限、Skills 与 MCP 在电脑设置。聊天与归档从电脑读取，不要求两个设备使用同一份同步库。",
-      );
+    const about = el.createEl("details", { cls: "pi-phone-setting-details" });
+    about.createEl("summary", { text: "助手与数据" });
+    about.createEl("p", {
+      text: "模型、账号、助手权限和工具统一在电脑上设置。任务修改和聊天归档保存在电脑库，手机笔记可作为副本附加，不自动双向同步。锁屏后暂停接收，已提交任务继续执行，回到前台后刷新。",
+    });
+  }
+  hide() {
+    this.unsubscribe?.();
   }
 }

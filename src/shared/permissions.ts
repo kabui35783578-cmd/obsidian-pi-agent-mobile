@@ -16,10 +16,10 @@ export function defaultPermissions(
     files: role === "manager" ? "computer" : "folder",
     read: true,
     write: true,
-    delete: true,
+    delete: role === "manager",
     commands: role === "manager",
-    skills: true,
-    mcp: true,
+    skills: role === "manager",
+    mcp: role === "manager",
     delegate: role === "manager",
   };
 }
@@ -46,7 +46,14 @@ export function permissionsFor(
   }
   if (agent.role === "manager" && value.files === "folder")
     value.files = "vault";
-  if (agent.role !== "manager") value.delegate = false;
+  if (agent.role !== "manager") {
+    value.files = "folder";
+    value.delete = false;
+    value.commands = false;
+    value.skills = false;
+    value.mcp = false;
+    value.delegate = false;
+  }
   if (
     value.files !== "computer" ||
     !value.read ||
@@ -57,7 +64,7 @@ export function permissionsFor(
   return value;
 }
 export function checkFilePermission(p: AgentPermissions, operation: string) {
-  const action = ["list", "search", "read"].includes(operation)
+  const action = ["list", "search", "read", "tasks"].includes(operation)
     ? "read"
     : operation === "trash"
       ? "delete"

@@ -6,6 +6,7 @@ import {
   Component,
   TFile,
   setIcon,
+  Menu,
   type WorkspaceLeaf,
 } from "obsidian";
 import type MobilePlugin from "./main.ts";
@@ -68,6 +69,12 @@ export class MobileChatView extends ItemView {
   private messagesComponent?: Component;
   private describing?: Promise<void>;
   private error = "";
+  private home!: HTMLElement;
+  private homeList!: HTMLElement;
+  private homeSearch!: HTMLInputElement;
+  private homeMode = true;
+  private summaries: ConversationSummary[] = [];
+  private homeRevision = 0;
   constructor(
     leaf: WorkspaceLeaf,
     readonly plugin: MobilePlugin,
@@ -93,6 +100,17 @@ export class MobileChatView extends ItemView {
       cls: "pi-phone-connection",
       attr: { role: "status", "aria-live": "polite" },
     });
+    this.home = el.createDiv({ cls: "pi-phone-home" });
+    const search = this.home.createDiv({
+      cls: "pi-phone-home-search",
+      attr: { hidden: "" },
+    });
+    this.homeSearch = search.createEl("input", {
+      type: "search",
+      attr: { placeholder: "搜索助手或聊天", "aria-label": "搜索助手或聊天" },
+    });
+    this.homeSearch.addEventListener("input", () => this.renderHome());
+    this.homeList = this.home.createDiv({ cls: "pi-phone-home-list" });
     this.timeline = el.createDiv({
       cls: "pi-chat-messages pi-phone-messages",
       attr: { "aria-label": "电脑助手聊天" },
@@ -117,12 +135,7 @@ export class MobileChatView extends ItemView {
     const composer = this.footer.createDiv({ cls: "pi-chat-composer" });
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
     const line = composer.createDiv({ cls: "pi-composer-line" });
-    iconButton(
-      line,
-      "paperclip",
-      "附加手机当前笔记副本",
-      () => void this.attach(),
-    );
+    iconButton(line, "plus", "附加手机当前笔记副本", () => void this.attach());
     this.input = line.createEl("textarea", {
       attr: {
         rows: "1",
@@ -132,6 +145,7 @@ export class MobileChatView extends ItemView {
     });
     this.input.addEventListener("input", () => {
       this.saveDraft();
+      this.resizeInput();
       this.controls();
     });
     // Mobile Return inserts a newline; sending uses the explicit touch button.
@@ -142,21 +156,18 @@ export class MobileChatView extends ItemView {
       () => void this.sendOrStop(),
       "pi-send-button",
     );
-    this.footer.createDiv({
-      cls: "pi-chat-status",
-      text: "任务与归档写入电脑库 · 不自动同步手机笔记",
-    });
     this.unsubscribe = this.plugin.client.subscribe((event) =>
       this.onEvent(event),
     );
     this.renderHeader();
     this.controls();
-    if (this.plugin.client.description) await this.chooseInitial();
+    if (this.plugin.client.description) await this.showHome();
     else this.welcome();
   }
   async onClose() {
     this.closed = true;
     this.generation++;
+    this.homeRevision++;
     this.saveDraft();
     this.unsubscribe?.();
     clearTimeout(this.refreshTimer);
@@ -164,15 +175,22 @@ export class MobileChatView extends ItemView {
     this.messagesComponent?.unload();
   }
   private welcome() {
+    this.setScreen(true);
+    this.homeList.empty();
     this.timeline.empty();
-    const welcome = this.timeline.createDiv({ cls: "pi-phone-welcome" });
-    welcome.createEl("h2", { text: "把电脑助手带在身边" });
+    const welcome = this.homeList.createDiv({ cls: "pi-phone-welcome" });
+    const manager = {
+      avatar: "builtin:coordinator",
+      name: "总管",
+    } as AgentRecord;
+    renderAvatar(welcome, this.app, manager);
+    welcome.createEl("h2", { text: "你的助手，随时聊" });
     welcome.createEl("p", {
       cls: "pi-muted",
-      text: "手机发起任务，电脑处理笔记、调用 Skills 和 MCP。已有微信聊天也能在历史中查看。",
+      text: "连接电脑，就能在这里聊天、处理笔记。",
     });
     welcome
-      .createEl("button", { text: "与电脑配对" })
+      .createEl("button", { text: "连接我的电脑", cls: "mod-cta" })
       .addEventListener("click", () => new PairPhoneModal(this.plugin).open());
     if (this.plugin.client.credential)
       welcome
@@ -190,44 +208,77 @@ export class MobileChatView extends ItemView {
     new Notice(this.error);
   }
   private async chooseInitial() {
-    const id = this.plugin.app.loadLocalStorage(
-      this.plugin.localKey("selected-agent"),
-    );
-    const agents: AgentRecord[] = this.plugin.client.description?.agents ?? [];
-    const agent =
-      agents.find((a) => a.id === id) ??
-      agents.find((a) => a.role === "manager") ??
-      agents[0];
-    if (agent && !this.closed) await this.selectAgent(agent);
+    await this.showHome();
   }
   private renderHeader() {
     if (!this.header) return;
     this.header.empty();
-    iconButton(this.header, "panel-left", "通讯录", () => this.contacts());
-    if (this.agent) renderAvatar(this.header, this.app, this.agent);
-    const identity = this.header.createEl("button", {
-      cls: "pi-phone-identity pi-text-button",
-      text: this.agent?.name ?? "Pi Agent",
-    });
-    identity.addEventListener("click", () => this.profile());
-    iconButton(this.header, "history", "聊天历史与归档", () => this.history());
+    if (this.homeMode) {
+      iconButton(
+        this.header,
+        "user-round",
+        "设置与返回笔记",
+        (event) => this.homeMenu(event),
+        "pi-phone-round pi-phone-account",
+      );
+      this.header.createDiv({ cls: "pi-phone-header-space" });
+      iconButton(
+        this.header,
+        "search",
+        "搜索助手或聊天",
+        () => {
+          const search = this.homeSearch.parentElement!;
+          search.hidden = !search.hidden;
+          if (!search.hidden) this.homeSearch.focus();
+          else {
+            this.homeSearch.value = "";
+            this.renderHome();
+          }
+        },
+        "pi-phone-round",
+      );
+      iconButton(
+        this.header,
+        "plus",
+        "开始新聊天",
+        () => this.startChat(),
+        "pi-phone-round",
+      );
+      return;
+    }
     iconButton(
       this.header,
-      "square-pen",
-      "新建对话",
-      () => void this.newConversation(),
+      "chevron-left",
+      "返回助手列表",
+      () => void this.showHome(),
+      "pi-phone-round",
     );
-    iconButton(this.header, "settings", "手机连接设置", () => {
-      (this.app as any).setting.open();
-      (this.app as any).setting.openTabById(this.plugin.manifest.id);
+    const identity = this.header.createEl("button", {
+      cls: "pi-phone-identity",
+      attr: { "aria-label": (this.agent?.name ?? "助手") + "，资料与聊天操作" },
     });
+    if (this.agent) renderAvatar(identity, this.app, this.agent);
+    identity.createSpan({ text: this.agent?.name ?? "Pi Agent" });
+    identity.addEventListener("click", (event) => this.chatMenu(event));
+    this.header.createDiv({ cls: "pi-phone-header-space" });
+    iconButton(
+      this.header,
+      "monitor",
+      "电脑连接与状态",
+      () => this.connectionInfo(),
+      "pi-phone-round pi-phone-host",
+    );
   }
   private controls() {
     if (!this.statusEl) return;
     const client = this.plugin.client;
-    this.statusEl.setText(
-      this.error || client.status + (client.description ? " · 由电脑执行" : ""),
-    );
+    this.statusEl.setText(this.error || client.status);
+    this.statusEl.hidden =
+      !this.error &&
+      (client.connected || (this.homeMode && !client.credential));
+    const host = this.header.querySelector<HTMLElement>(".pi-phone-host");
+    host?.toggleClass("is-connected", client.connected);
+    host?.setAttribute("aria-label", "电脑连接：" + client.status);
     this.statusEl.toggleClass(
       "is-error",
       Boolean(this.error) || !client.connected,
@@ -246,8 +297,8 @@ export class MobileChatView extends ItemView {
       (!running && !this.input.value.trim() && !this.outbox());
     this.input.disabled = this.sending;
     this.input.placeholder = this.conversation?.archive
-      ? "已归档，点右上角新建对话"
-      : "发消息给 " + (this.agent?.name ?? "电脑助手") + "…";
+      ? "已归档，点助手名开始新聊天"
+      : "问问" + (this.agent?.name ?? "电脑助手") + "…";
     this.attachmentEl.empty();
     if (this.attachment) {
       const button = this.attachmentEl.createEl("button", {
@@ -278,9 +329,10 @@ export class MobileChatView extends ItemView {
         ) ?? undefined)
       : undefined;
   }
-  private async selectAgent(agent: AgentRecord) {
+  private async selectAgent(agent: AgentRecord, fresh = false) {
     this.saveDraft();
     this.agent = agent;
+    this.setScreen(false);
     this.conversation = undefined;
     this.input.value = "";
     this.attachment = undefined;
@@ -292,6 +344,10 @@ export class MobileChatView extends ItemView {
     this.controls();
     this.timeline.setText("正在读取电脑上的对话…");
     try {
+      if (fresh) {
+        await this.newConversation();
+        return;
+      }
       const list = await this.plugin.client.call<ConversationSummary[]>(
         "conversation.list",
         { agentId: agent.id },
@@ -303,10 +359,10 @@ export class MobileChatView extends ItemView {
       const item = list.find((c) => c.id === selected) ?? list[0];
       if (item) await this.openConversation(item.id);
       else {
-        this.timeline.setText("还没有对话，点右上角开始新对话。");
+        await this.newConversation();
       }
     } catch (e) {
-      this.fail(e);
+      if (generation === this.generation) this.fail(e);
     }
   }
   async openConversation(id: string) {
@@ -322,12 +378,14 @@ export class MobileChatView extends ItemView {
       this.agent = this.plugin.client.description.agents.find(
         (a: AgentRecord) => a.id === conversation.agentId,
       );
+      this.setScreen(false);
       this.app.saveLocalStorage(
         this.plugin.localKey("selected:" + conversation.agentId),
         id,
       );
       const draft = this.app.loadLocalStorage(this.draftKey(id));
       this.input.value = draft?.text ?? "";
+      this.resizeInput();
       this.attachment = draft?.attachment;
       this.error = "";
       this.limit = 60;
@@ -340,6 +398,8 @@ export class MobileChatView extends ItemView {
   }
   private async newConversation() {
     if (!this.agent || this.sending) return;
+    const generation = this.generation,
+      agentId = this.agent.id;
     const carry = this.conversation?.archive
       ? { text: this.input.value, attachment: this.attachment }
       : undefined;
@@ -348,6 +408,13 @@ export class MobileChatView extends ItemView {
         "conversation.create",
         { agentId: this.agent.id },
       );
+      if (
+        this.closed ||
+        this.homeMode ||
+        generation !== this.generation ||
+        this.agent?.id !== agentId
+      )
+        return;
       await this.openConversation(item.id);
       if (carry) {
         this.input.value = carry.text;
@@ -356,7 +423,7 @@ export class MobileChatView extends ItemView {
         this.controls();
       }
     } catch (e) {
-      this.fail(e);
+      if (generation === this.generation) this.fail(e);
     }
   }
   private async refreshConversation() {
@@ -423,6 +490,12 @@ export class MobileChatView extends ItemView {
     if (event.type === "connection") {
       this.controls();
       if (
+        this.homeMode &&
+        this.plugin.client.connected &&
+        this.plugin.client.description
+      )
+        void this.refreshHome();
+      if (
         this.plugin.client.connected &&
         (!this.plugin.client.description || !this.agent) &&
         !this.describing
@@ -469,6 +542,7 @@ export class MobileChatView extends ItemView {
     } else if (event.type === "conversation.changed") {
       if (event.status !== "running") this.streams.delete(event.id);
       if (event.id === this.conversation?.id) this.queueRefresh();
+      if (this.homeMode) void this.refreshHome();
     } else if (event.type === "delegation.updated") {
       if (
         this.conversation &&
@@ -499,7 +573,12 @@ export class MobileChatView extends ItemView {
         this.fail(event.operation.error);
       this.queueRefresh();
     } else if (event.type === "agents" || event.type === "model.status") {
-      void this.plugin.refreshDescription().catch((e) => this.fail(e));
+      void this.plugin
+        .refreshDescription()
+        .then(() => {
+          if (this.homeMode) this.renderHome();
+        })
+        .catch((e) => this.fail(e));
     }
   }
   private renderMessages() {
@@ -512,6 +591,9 @@ export class MobileChatView extends ItemView {
       100;
     const previousHeight = this.timeline.scrollHeight,
       previousTop = this.timeline.scrollTop;
+    const activityOpen =
+      this.timeline.querySelector<HTMLDetailsElement>(".pi-activity")?.open ??
+      false;
     this.messagesComponent?.unload();
     this.messagesComponent = new Component();
     this.messagesComponent.load();
@@ -551,19 +633,34 @@ export class MobileChatView extends ItemView {
       index++
     ) {
       const message = c.messages[index];
+      const previous = c.messages[index - 1];
+      if (
+        !previous ||
+        new Date(message.at).getTime() - new Date(previous.at).getTime() >
+          15 * 60_000
+      ) {
+        const date = new Date(message.at);
+        this.timeline.createDiv({
+          cls: "pi-phone-date",
+          text:
+            (date.toDateString() === new Date().toDateString()
+              ? "今天"
+              : date.toLocaleDateString("zh-CN", {
+                  month: "numeric",
+                  day: "numeric",
+                })) +
+            " " +
+            date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        });
+      }
       const row = this.timeline.createDiv({
         cls: "pi-message pi-message-" + message.role,
       });
-      row.createDiv({
-        cls: "pi-message-origin",
-        text:
-          sourceName(message.origin ?? c.source) +
-          " · " +
-          new Date(message.at).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-      });
+      if (message.role === "user" && (message.origin ?? c.source) !== "mobile")
+        row.createDiv({
+          cls: "pi-message-origin",
+          text: sourceName(message.origin ?? c.source),
+        });
       const bubble = row.createDiv({
         cls: "pi-message-bubble markdown-rendered",
       });
@@ -598,7 +695,8 @@ export class MobileChatView extends ItemView {
     }
     if (c.events.length) {
       const records = this.timeline.createEl("details", { cls: "pi-activity" });
-      records.createEl("summary", { text: "任务记录 · " + c.events.length });
+      records.open = activityOpen;
+      records.createEl("summary", { text: "工作过程" });
       for (const e of c.events.slice(-100))
         records.createDiv({
           text:
@@ -768,6 +866,7 @@ export class MobileChatView extends ItemView {
       this.input.value.trim() === operation.text
     ) {
       this.input.value = "";
+      this.resizeInput();
       this.attachment = undefined;
       this.saveDraft();
     }
@@ -800,9 +899,244 @@ export class MobileChatView extends ItemView {
     }
     this.controls();
   }
-  private contacts() {
+  private resizeInput() {
+    if (!this.input) return;
+    this.input.style.height = "auto";
+    this.input.style.height =
+      Math.min(128, Math.max(36, this.input.scrollHeight)) + "px";
+  }
+  private setScreen(home: boolean) {
+    this.homeMode = home;
+    this.home.hidden = !home;
+    this.timeline.hidden = home;
+    this.footer.hidden = home;
+    this.contentEl.toggleClass("is-home", home);
+    this.renderHeader();
+    this.controls();
+  }
+  private async showHome() {
+    this.saveDraft();
+    // Invalidate pending agent/conversation fetches when returning to the list.
+    this.generation++;
+    this.setScreen(true);
+    if (!this.plugin.client.description) {
+      this.welcome();
+      return;
+    }
+    this.renderHome();
+    await this.refreshHome();
+  }
+  private async refreshHome() {
+    const revision = ++this.homeRevision;
+    try {
+      const list =
+        await this.plugin.client.call<ConversationSummary[]>(
+          "conversation.list",
+        );
+      if (this.closed || revision !== this.homeRevision) return;
+      this.summaries = list;
+      if (this.homeMode) this.renderHome();
+    } catch (error) {
+      if (revision === this.homeRevision && this.homeMode) this.fail(error);
+    }
+  }
+  private renderHome() {
+    if (!this.homeList) return;
+    this.homeList.empty();
+    const query = this.homeSearch.value.trim().toLocaleLowerCase();
+    const latest = (id: string) =>
+      this.summaries
+        .filter((c) => c.agentId === id && !c.archive && c.messageCount > 0)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    const agents = [
+      ...(this.plugin.client.description?.agents ?? []),
+    ] as AgentRecord[];
+    agents.sort(
+      (a, b) =>
+        Number(b.role === "manager") - Number(a.role === "manager") ||
+        (latest(b.id)?.updatedAt ?? "").localeCompare(
+          latest(a.id)?.updatedAt ?? "",
+        ) ||
+        a.name.localeCompare(b.name, "zh-CN"),
+    );
+    const featured = query ? [] : agents.slice(0, 3);
+    if (featured.length) {
+      const favorites = this.homeList.createDiv({
+        cls: "pi-phone-favorites",
+        attr: { "aria-label": "常用助手" },
+      });
+      for (const agent of featured) {
+        const button = favorites.createEl("button", {
+          cls: "pi-phone-favorite",
+          attr: { "aria-label": "与" + agent.name + "聊天" },
+        });
+        renderAvatar(button, this.app, agent);
+        button.createSpan({ text: agent.name });
+        button.addEventListener("click", () => void this.selectAgent(agent));
+      }
+    }
+    const rows = this.homeList.createDiv({
+      cls: "pi-phone-recent",
+      attr: { "aria-label": "助手聊天" },
+    });
+    const remaining = query
+      ? agents.filter((a) =>
+          [a.name, a.description, a.scope, latest(a.id)?.preview ?? ""]
+            .join(" ")
+            .toLocaleLowerCase()
+            .includes(query),
+        )
+      : agents.filter((a) => !featured.includes(a));
+    for (const agent of remaining) {
+      const summary = latest(agent.id);
+      const button = rows.createEl("button", {
+        cls: "pi-phone-contact",
+        attr: { "aria-label": "与" + agent.name + "聊天" },
+      });
+      renderAvatar(button, this.app, agent);
+      const body = button.createDiv({ cls: "pi-phone-contact-body" });
+      const title = body.createDiv({ cls: "pi-phone-contact-title" });
+      title.createEl("strong", { text: agent.name });
+      if (summary)
+        title.createEl("time", {
+          text: this.relativeTime(summary.updatedAt),
+          attr: { datetime: summary.updatedAt },
+        });
+      body.createDiv({
+        cls: "pi-phone-contact-preview",
+        text:
+          summary?.status === "running"
+            ? "正在处理…"
+            : summary?.preview ||
+              agent.description ||
+              (agent.scope ? "负责 " + agent.scope : "帮你处理笔记与日常任务"),
+      });
+      button.addEventListener("click", () => void this.selectAgent(agent));
+    }
+    // With only a few assistants, use the remaining space for actual recent chats.
+    if (!query && agents.length <= 3) {
+      const recent = this.summaries
+        .filter((c) => !c.archive && c.messageCount > 0)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, 12);
+      if (recent.length)
+        rows.createDiv({ cls: "pi-phone-list-label", text: "最近聊天" });
+      for (const item of recent) {
+        const agent = agents.find((a) => a.id === item.agentId);
+        if (!agent) continue;
+        const button = rows.createEl("button", { cls: "pi-phone-contact" });
+        renderAvatar(button, this.app, agent);
+        const body = button.createDiv({ cls: "pi-phone-contact-body" });
+        const title = body.createDiv({ cls: "pi-phone-contact-title" });
+        title.createEl("strong", { text: item.title || agent.name });
+        title.createEl("time", { text: this.relativeTime(item.updatedAt) });
+        body.createDiv({
+          cls: "pi-phone-contact-preview",
+          text: item.preview || agent.name,
+        });
+        button.addEventListener(
+          "click",
+          () => void this.openConversation(item.id),
+        );
+      }
+    }
+    if (query && !remaining.length)
+      rows.createDiv({
+        cls: "pi-phone-empty",
+        text: "没有找到，试试助手名字或聊天内容。",
+      });
+    if (!agents.length)
+      rows.createDiv({
+        cls: "pi-phone-empty",
+        text: "还没有助手，请先在电脑打开 Pi Agent。",
+      });
+  }
+  private relativeTime(value: string) {
+    const date = new Date(value),
+      now = new Date();
+    if (date.toDateString() === now.toDateString())
+      return date.toLocaleTimeString("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return "昨天";
+    return date.toLocaleDateString("zh-CN", {
+      month: "numeric",
+      day: "numeric",
+    });
+  }
+  private chatMenu(event: MouseEvent) {
+    new Menu()
+      .addItem((item) =>
+        item
+          .setTitle("新聊天")
+          .setIcon("square-pen")
+          .onClick(() => void this.newConversation()),
+      )
+      .addItem((item) =>
+        item
+          .setTitle("聊天历史与归档")
+          .setIcon("history")
+          .onClick(() => this.history()),
+      )
+      .addItem((item) =>
+        item
+          .setTitle("助手资料")
+          .setIcon("contact-round")
+          .onClick(() => this.profile()),
+      )
+      .addItem((item) =>
+        item
+          .setTitle("设置与电脑连接")
+          .setIcon("settings")
+          .onClick(() => this.plugin.openSettings()),
+      )
+      .showAtMouseEvent(event);
+  }
+  private homeMenu(event: MouseEvent) {
+    new Menu()
+      .addItem((item) =>
+        item
+          .setTitle("设置与电脑连接")
+          .setIcon("settings")
+          .onClick(() => this.plugin.openSettings()),
+      )
+      .addItem((item) =>
+        item
+          .setTitle("返回 Obsidian 笔记")
+          .setIcon("notebook")
+          .onClick(() => void this.plugin.leaveChat()),
+      )
+      .showAtMouseEvent(event);
+  }
+  private connectionInfo() {
     const modal = new Modal(this.app);
-    modal.titleEl.setText("通讯录");
+    modal.modalEl.addClass("pi-phone-modal");
+    modal.titleEl.setText("我的电脑");
+    modal.contentEl.createEl("p", {
+      text: this.plugin.client.description?.vaultName ?? "尚未连接",
+    });
+    modal.contentEl.createEl("p", {
+      cls: "pi-muted",
+      text: this.plugin.client.status,
+    });
+    modal.contentEl.createEl("p", {
+      cls: "pi-muted",
+      text: "任务在电脑执行。电脑上的 Obsidian 需要保持打开。",
+    });
+    const button = modal.contentEl.createEl("button", { text: "连接设置" });
+    button.addEventListener("click", () => {
+      modal.close();
+      this.plugin.openSettings();
+    });
+    modal.open();
+  }
+  private startChat() {
+    const modal = new Modal(this.app);
+    modal.titleEl.setText("与谁开始新聊天？");
+    modal.modalEl.addClass("pi-phone-modal");
     modal.contentEl.addClass("pi-phone-contacts");
     const search = modal.contentEl.createEl("input", {
       type: "search",
@@ -833,7 +1167,7 @@ export class MobileChatView extends ItemView {
         });
         row.addEventListener("click", () => {
           modal.close();
-          void this.selectAgent(agent);
+          void this.selectAgent(agent, true);
         });
       }
     };
@@ -845,6 +1179,7 @@ export class MobileChatView extends ItemView {
     if (!this.agent) return;
     const agent = this.agent as any;
     const modal = new Modal(this.app);
+    modal.modalEl.addClass("pi-phone-modal");
     modal.titleEl.setText(agent.name);
     renderAvatar(modal.contentEl, this.app, agent);
     modal.contentEl.createEl("p", { text: agent.description });
@@ -958,6 +1293,7 @@ class PhoneHistory extends Modal {
     super(view.app);
   }
   onOpen() {
+    this.modalEl.addClass("pi-phone-modal");
     this.titleEl.setText("聊天历史");
     void this.refresh();
   }

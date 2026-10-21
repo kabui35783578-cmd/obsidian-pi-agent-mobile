@@ -98,6 +98,8 @@ export const toolLabel = (name: string) =>
     bash: "执行 Bash",
     vault_list: "查看资料",
     vault_search: "查找笔记",
+    vault_tasks: "查看笔记待办",
+    task_list: "查看定时任务",
     vault_read: "阅读笔记",
     vault_create: "新建笔记",
     vault_write: "修改笔记",
@@ -105,7 +107,12 @@ export const toolLabel = (name: string) =>
     vault_trash: "移入回收站",
     list_agents: "查看助手",
     delegate_task: "交给专属助手",
-    read_skill: "使用技能",
+    read_skill: "读取技能",
+    tool_search: "按需发现服务工具",
+    list_skills: "查找技能",
+    discover_mcp_tools: "查找 MCP 工具",
+    call_mcp_tool: "调用 MCP 工具",
+    request_manager: "请求总管处理",
   })[name] ??
   (name.startsWith("skill:")
     ? "使用技能 · " + name.slice(6)
