@@ -1947,8 +1947,8 @@
 }
 /* Phone companion (source: src/mobile/mobile.css). */
 /* Phone UI: open roster, soft round controls, compact conversational rhythm. */
-/* Only the active phone workspace takes over chrome. Never change global
-   safe-area or keyboard variables: Obsidian still owns the native viewport. */
+/* Only the active phone workspace takes over chrome. Obsidian owns the
+   keyboard viewport; the chat owns safe-area padding while its chrome is hidden. */
 body.is-mobile.pi-phone-active {
   --navbar-height: 0px;
   --navbar-bottom-offset: 0px;
@@ -1964,6 +1964,13 @@ body.is-mobile.pi-phone-active .mod-root .view-header,
 body.is-mobile.pi-phone-active .status-bar {
   display: none !important;
 }
+/* Transfer the root's safe-area padding to the view, so floating-navigation
+   themes cannot remove it and non-floating layouts cannot apply it twice. */
+body.is-mobile.pi-phone-active .workspace > .mod-root {
+  padding-top: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
 body.is-mobile.pi-phone-active
   .workspace-leaf-content[data-type="pi-agent-mobile-chat"] {
   --view-top-spacing: 0px;
@@ -1972,16 +1979,35 @@ body.is-mobile.pi-phone-active
   overflow: hidden;
 }
 body.is-mobile.pi-phone-active .pi-phone-view {
+  --pi-safe-top: max(
+    0px,
+    var(--safe-area-inset-top, 0px),
+    env(safe-area-inset-top, 0px)
+  );
+  --pi-safe-left: max(
+    0px,
+    var(--safe-area-inset-left, 0px),
+    env(safe-area-inset-left, 0px)
+  );
+  --pi-safe-right: max(
+    0px,
+    var(--safe-area-inset-right, 0px),
+    env(safe-area-inset-right, 0px)
+  );
+  --pi-safe-bottom: max(
+    0px,
+    var(--safe-area-inset-bottom, 0px),
+    env(safe-area-inset-bottom, 0px)
+  );
+  box-sizing: border-box;
+  padding: var(--pi-safe-top) var(--pi-safe-right) 0 var(--pi-safe-left) !important;
   margin: 0 !important;
   height: 100%;
 }
 body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   padding-bottom: max(
     10px,
-    calc(
-      var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) -
-        var(--keyboard-height, 0px)
-    )
+    calc(var(--pi-safe-bottom) - var(--keyboard-height, 0px))
   );
 }
 .workspace-leaf-content[data-type="pi-agent-mobile-chat"] > .view-header {
@@ -2106,7 +2132,13 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   min-height: 0;
   overflow: auto;
   padding: 0 20px
-    max(20px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
+    max(
+      20px,
+      var(
+        --pi-safe-bottom,
+        var(--safe-area-inset-bottom, env(safe-area-inset-bottom))
+      )
+    );
   overscroll-behavior: contain;
 }
 .pi-phone-home-search {
