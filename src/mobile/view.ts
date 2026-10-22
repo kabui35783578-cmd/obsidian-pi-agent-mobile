@@ -18,7 +18,7 @@ import {
 } from "../plugin/ui-elements.ts";
 import { MOBILE_AVATARS } from "./avatar-data.ts";
 import { remoteId } from "../shared/mobile-wire.ts";
-import { latestByAgent } from "../shared/conversation-ui.ts";
+import { latestByAgent, toolSteps } from "../shared/conversation-ui.ts";
 import { MarkdownCache } from "../plugin/markdown-cache.ts";
 import { SlashMenu } from "../plugin/slash-menu.ts";
 import { handleSlashUI } from "../plugin/command-ui.ts";
@@ -29,6 +29,7 @@ import type {
   Conversation,
   ConversationSummary,
   DelegationRecord,
+  ToolEvent,
 } from "../shared/types.ts";
 
 export const MOBILE_VIEW = "pi-agent-mobile-chat";
@@ -507,6 +508,22 @@ export class MobileChatView extends ItemView {
         this.closed
       )
         return;
+      const end = (c as any).messageOffset ?? 0;
+      // A page contains its own events. Keep already loaded turns and replace
+      // the older range, including legacy unscoped events only at the beginning.
+      c.events = [
+        ...older.events.filter((event) =>
+          event.messageIndex === undefined
+            ? older.messageOffset === 0
+            : event.messageIndex >= older.messageOffset &&
+              event.messageIndex < end,
+        ),
+        ...c.events.filter((event) =>
+          event.messageIndex === undefined
+            ? older.messageOffset !== 0
+            : event.messageIndex >= end,
+        ),
+      ];
       c.messages.unshift(...older.messages);
       (c as any).messageOffset = older.messageOffset;
       c.delegations = [...(older.delegations ?? []), ...(c.delegations ?? [])];
@@ -629,9 +646,35 @@ export class MobileChatView extends ItemView {
       100;
     const previousHeight = this.timeline.scrollHeight,
       previousTop = this.timeline.scrollTop;
-    const activityOpen =
-      this.timeline.querySelector<HTMLDetailsElement>(".pi-activity")?.open ??
-      false;
+    const opened = new Set(
+      [
+        ...this.timeline.querySelectorAll<HTMLDetailsElement>(
+          ".pi-activity[open]",
+        ),
+      ].map((element) => element.dataset.activityKey),
+    );
+    const offset = (c as any).messageOffset ?? 0;
+    const start = Math.max(0, c.messages.length - this.limit);
+    const activeIndex =
+      offset + c.messages.findLastIndex((message) => message.role === "user");
+    const eventGroups = new Map<number | undefined, ToolEvent[]>();
+    const delegated = new Set(
+      c.delegations?.map((record) => record.messageIndex),
+    );
+    for (const event of c.events) {
+      if (
+        delegated.has(event.messageIndex!) &&
+        (event.name === "delegate_task" || event.name.startsWith("delegate:"))
+      )
+        continue;
+      const index =
+        Number.isSafeInteger(event.messageIndex) && event.messageIndex! >= 0
+          ? event.messageIndex
+          : undefined;
+      const group = eventGroups.get(index);
+      if (group) group.push(event);
+      else eventGroups.set(index, [event]);
+    }
     this.messagesComponent?.unload();
     this.messagesComponent = new Component();
     this.messagesComponent.load();
@@ -665,11 +708,14 @@ export class MobileChatView extends ItemView {
       this.timeline
         .createEl("button", { text: "加载更早消息", cls: "pi-text-button" })
         .addEventListener("click", () => void this.loadOlder());
-    for (
-      let index = Math.max(0, c.messages.length - this.limit);
-      index < c.messages.length;
-      index++
-    ) {
+    if (offset + start === 0 && eventGroups.has(undefined))
+      this.renderActivity(
+        eventGroups.get(undefined)!,
+        undefined,
+        opened,
+        activeIndex,
+      );
+    for (let index = start; index < c.messages.length; index++) {
       const message = c.messages[index];
       const previous = c.messages[index - 1];
       if (
@@ -721,6 +767,9 @@ export class MobileChatView extends ItemView {
         );
         void body.ready;
       }
+      const events = eventGroups.get(offset + index);
+      if (events?.length)
+        this.renderActivity(events, offset + index, opened, activeIndex);
       for (const record of c.delegations ?? [])
         if (record.messageIndex === index + ((c as any).messageOffset ?? 0))
           this.delegation(record);
@@ -746,19 +795,6 @@ export class MobileChatView extends ItemView {
       bubble.appendChild(node);
       this.streamNodes.set(c.id, node);
     }
-    if (c.events.length) {
-      const records = this.timeline.createEl("details", { cls: "pi-activity" });
-      records.open = activityOpen;
-      records.createEl("summary", { text: "工作过程" });
-      for (const e of c.events.slice(-100))
-        records.createDiv({
-          text:
-            toolLabel(e.name) +
-            " · " +
-            { running: "执行中", completed: "完成", failed: "失败" }[e.status] +
-            (e.detail ? " · " + e.detail : ""),
-        });
-    }
     this.timeline.createDiv({
       cls: "pi-phone-result-status",
       text: {
@@ -775,6 +811,72 @@ export class MobileChatView extends ItemView {
         0,
         previousTop + this.timeline.scrollHeight - previousHeight,
       );
+  }
+  private renderActivity(
+    events: ToolEvent[],
+    index: number | undefined,
+    opened: Set<string | undefined>,
+    activeIndex: number,
+  ) {
+    const c = this.conversation!;
+    const key = c.id + ":" + (index ?? "legacy");
+    const active =
+      index !== undefined && index === activeIndex && c.status === "running";
+    const steps = toolSteps(events);
+    const running =
+      active && [...steps].reverse().find((step) => step.status === "running");
+    const incomplete = steps.some(
+      (step) =>
+        step.status === "failed" || (!active && step.status === "running"),
+    );
+    const records = this.timeline.createEl("details", { cls: "pi-activity" });
+    records.dataset.activityKey = key;
+    if (index !== undefined) records.dataset.messageIndex = String(index);
+    records.open = opened.has(key);
+    records.createEl("summary", {
+      text:
+        index === undefined
+          ? "更早的工作过程 · 未关联消息"
+          : running
+            ? toolLabel(running.name) + "…"
+            : incomplete
+              ? "工作过程 · 有步骤未完成"
+              : "工作过程 · " + steps.length + " 步",
+    });
+    const list = records.createDiv({ cls: "pi-activity-list" });
+    for (const step of steps) {
+      const state =
+        step.status === "running" && !active ? "incomplete" : step.status;
+      const label =
+        state === "failed"
+          ? "失败"
+          : state === "running"
+            ? "执行中"
+            : state === "incomplete"
+              ? "未完成"
+              : "完成";
+      const row = list.createDiv({
+        cls: "pi-tool-event",
+        attr: { "data-status": state },
+      });
+      const status = row.createSpan({
+        cls: "pi-step-status " + state,
+        attr: { "aria-label": label },
+      });
+      setIcon(
+        status,
+        state === "failed"
+          ? "circle-alert"
+          : state === "running"
+            ? "loader-circle"
+            : state === "incomplete"
+              ? "circle-minus"
+              : "check",
+      );
+      const text = row.createDiv({ cls: "pi-step-content" });
+      text.createSpan({ text: toolLabel(step.name) });
+      if (step.detail) text.createDiv({ cls: "pi-muted", text: step.detail });
+    }
   }
   private markdown(text: string, el: HTMLElement) {
     // Intercept internal links above; don't render file embeds from the phone's

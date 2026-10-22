@@ -94,6 +94,7 @@ export interface ToolEvent {
   status: "running" | "completed" | "failed";
   detail?: string;
   taskId: string;
+  toolCallId?: string;
   messageIndex?: number;
 }
 export interface Conversation {
