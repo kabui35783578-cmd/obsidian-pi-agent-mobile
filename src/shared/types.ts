@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   contactsOnStartup: true,
 };
 export interface ChatMessage {
+  kind?: "command";
   role: "user" | "assistant" | "system";
   text: string;
   at: string;
@@ -105,6 +106,16 @@ export interface Conversation {
   events: ToolEvent[];
   status: "idle" | "running" | "failed" | "cancelled";
   piSessionFile?: string;
+  /** Per-conversation overrides; absent means follow the agent/global setting. */
+  modelOverride?: string;
+  thinkingLevel?:
+    | "off"
+    | "minimal"
+    | "low"
+    | "medium"
+    | "high"
+    | "xhigh"
+    | "max";
   delegations?: DelegationRecord[];
   parent?: { conversationId: string; agentId: string; messageIndex: number };
   archive?: { path: string; at: string };

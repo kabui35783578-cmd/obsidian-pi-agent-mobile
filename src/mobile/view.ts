@@ -20,6 +20,10 @@ import { MOBILE_AVATARS } from "./avatar-data.ts";
 import { remoteId } from "../shared/mobile-wire.ts";
 import { latestByAgent } from "../shared/conversation-ui.ts";
 import { MarkdownCache } from "../plugin/markdown-cache.ts";
+import { SlashMenu } from "../plugin/slash-menu.ts";
+import { handleSlashUI } from "../plugin/command-ui.ts";
+import { CommandDraft } from "../plugin/command-draft.ts";
+import { parseSlash } from "../shared/slash-commands.ts";
 import type {
   AgentRecord,
   Conversation,
@@ -41,6 +45,7 @@ const sourceName = (source: string) =>
 const safeMarkdown = (text: string) =>
   text.replace(/!\[\[([^\]]+)\]\]/g, "[[$1]]");
 interface Outbox {
+  command?: boolean;
   operationId: string;
   id: string;
   text: string;
@@ -57,6 +62,8 @@ export class MobileChatView extends ItemView {
   private footer!: HTMLElement;
   private input!: HTMLTextAreaElement;
   private sendButton!: HTMLButtonElement;
+  private slashMenu?: SlashMenu;
+  private commandPending = false;
   private attachmentEl!: HTMLElement;
   private attachment?: { path: string; text: string };
   private generation = 0;
@@ -156,6 +163,13 @@ export class MobileChatView extends ItemView {
       this.resizeInput();
       this.controls();
     });
+    if (this.slashMenu) this.removeChild(this.slashMenu);
+    this.slashMenu = this.addChild(
+      new SlashMenu(composer, this.input, (text) => {
+        this.input.value = text;
+        void this.runSlash(text);
+      }),
+    );
     // Mobile Return inserts a newline; sending uses the explicit touch button.
     this.sendButton = iconButton(
       line,
@@ -173,6 +187,7 @@ export class MobileChatView extends ItemView {
     else this.welcome();
   }
   async onClose() {
+    this.slashMenu?.close();
     this.markdownCache.clear();
     this.closed = true;
     this.generation++;
@@ -381,6 +396,7 @@ export class MobileChatView extends ItemView {
     }
   }
   async openConversation(id: string) {
+    this.slashMenu?.close();
     this.saveDraft();
     const generation = ++this.generation;
     try {
@@ -676,7 +692,10 @@ export class MobileChatView extends ItemView {
         });
       }
       const row = this.timeline.createDiv({
-        cls: "pi-message pi-message-" + message.role,
+        cls:
+          "pi-message pi-message-" +
+          message.role +
+          (message.kind === "command" ? " pi-message-command" : ""),
       });
       if (message.role === "user" && (message.origin ?? c.source) !== "mobile")
         row.createDiv({
@@ -843,10 +862,117 @@ export class MobileChatView extends ItemView {
       this.fail(e);
     }
   }
-  private async sendOrStop() {
+  private async runSlash(text: string) {
+    const command = parseSlash(text);
+    if (!command || command.name.startsWith("skill:")) return false;
+    if ((this.commandPending && command.name !== "stop") || !this.slashMenu)
+      return true;
+    if (this.outbox()) {
+      this.fail("请先确认上一条消息的发送结果，再使用命令");
+      return true;
+    }
+    this.commandPending = true;
+    const id = this.conversation?.id,
+      generation = this.generation,
+      agentId = this.agent?.id;
+    const current = () =>
+      this.generation === generation &&
+      this.conversation?.id === id &&
+      !this.closed;
+    const draft = new CommandDraft(this.input, text, () => {
+      this.saveDraft();
+      this.controls();
+      this.resizeInput();
+    });
+    try {
+      this.slashMenu.close();
+      await handleSlashUI(text, {
+        menu: this.slashMenu,
+        current,
+        consume: (value) => draft.consume(value),
+        feedback: (value) => new Notice(value),
+        options: (kind) =>
+          this.plugin.client.call("command.options", { id, kind }),
+        history: async () => {
+          const rows = await this.plugin.client.call<ConversationSummary[]>(
+            "conversation.list",
+            { agentId, includeArchived: true },
+          );
+          return rows.map((c) => ({
+            label: c.title,
+            description: (c.archive ? "已归档 · " : "") + c.preview,
+            value: c.id,
+            current: c.id === id,
+          }));
+        },
+        resume: async (value) => {
+          if (current() && this.input.value.trim() === text) {
+            this.input.value = "";
+            this.saveDraft();
+          }
+          if (current()) await this.openConversation(value);
+        },
+        input: (value) => {
+          if (current()) {
+            this.input.value = value;
+            this.input.focus();
+            this.saveDraft();
+            this.controls();
+            this.resizeInput();
+          }
+        },
+        local: async (name) => {
+          if (current() && this.input.value.trim() === text) {
+            this.input.value = "";
+            this.saveDraft();
+          }
+          if (name === "new") await this.newConversation();
+          else if (name === "settings") this.plugin.openSettings();
+          else if (name === "stop") {
+            await this.plugin.client.mutation("chat.cancel", { id });
+            this.queueRefresh();
+          } else if (name === "copy") {
+            const last = this.conversation
+              ? [...this.conversation.messages]
+                  .reverse()
+                  .find((m) => m.role === "assistant")
+              : undefined;
+            if (!last)
+              throw Error("当前已加载的消息里没有助手回复，请先加载更早消息");
+            await navigator.clipboard.writeText(last.text);
+            new Notice("已复制最后一条回答");
+          }
+        },
+        execute: async (value) => {
+          if (!current()) return;
+          if (/^\/session(?:\s|$)/i.test(value))
+            return this.plugin.client.call<string>("command.inspect", {
+              id,
+              text: value,
+            });
+          await this.sendOrStop(true, value);
+        },
+      });
+    } catch (error) {
+      if (current()) {
+        draft.restore();
+        this.slashMenu.info(
+          "命令未完成",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    } finally {
+      draft.dispose();
+      this.commandPending = false;
+      this.controls();
+      this.resizeInput();
+    }
+    return true;
+  }
+  private async sendOrStop(skipCommand = false, commandText?: string) {
     if (!this.conversation || this.sending) return;
     const id = this.conversation.id;
-    if (this.conversation.status === "running") {
+    if (this.conversation.status === "running" && !skipCommand) {
       try {
         await this.plugin.client.mutation("chat.cancel", { id });
         this.queueRefresh();
@@ -855,14 +981,16 @@ export class MobileChatView extends ItemView {
       }
       return;
     }
+    if (!skipCommand && (await this.runSlash(this.input.value.trim()))) return;
     if (this.conversation.archive) return;
     const pending = this.outbox();
-    if (!pending && !this.input.value.trim()) return;
+    if (!pending && !(commandText ?? this.input.value.trim())) return;
     const operation: Outbox = pending ?? {
       operationId: remoteId(),
       id,
-      text: this.input.value.trim(),
-      attachment: this.attachment,
+      text: commandText ?? this.input.value.trim(),
+      attachment: commandText ? undefined : this.attachment,
+      command: Boolean(commandText),
     };
     if (
       operation.text.length + (operation.attachment?.text.length ?? 0) >
@@ -889,6 +1017,7 @@ export class MobileChatView extends ItemView {
     } catch (e) {
       this.fail(e);
       this.renderMessages();
+      if (skipCommand) throw e;
     } finally {
       this.sending = false;
       this.controls();
@@ -902,7 +1031,7 @@ export class MobileChatView extends ItemView {
     ) {
       this.input.value = "";
       this.resizeInput();
-      this.attachment = undefined;
+      if (!operation.command) this.attachment = undefined;
       this.saveDraft();
     }
     // Save the draft first. A crash between these writes retains the stable
@@ -941,6 +1070,7 @@ export class MobileChatView extends ItemView {
       Math.min(128, Math.max(36, this.input.scrollHeight)) + "px";
   }
   private setScreen(home: boolean) {
+    this.slashMenu?.close();
     this.homeMode = home;
     this.home.hidden = !home;
     this.timeline.hidden = home;

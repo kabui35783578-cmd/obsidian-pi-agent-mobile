@@ -1,7 +1,7 @@
 {
   "id": "pi-agent-mobile",
   "name": "Pi Agent Mobile",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "minAppVersion": "1.11.4",
   "description": "Mobile companion for a desktop Pi Agent: chat, delegation and shared history over LAN or VPN. Testing release.",
   "author": "Pi Agent contributors",

@@ -304,7 +304,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-contact-title time {
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--pi-secondary);
   font-weight: 400;
 }
@@ -333,7 +333,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  padding: 4px 12px 10px;
+  padding: 8px 16px 12px;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -347,9 +347,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   display: flex;
   flex-direction: column;
   width: fit-content;
-  max-width: 90%;
+  max-width: 88%;
   min-width: 0;
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -363,16 +363,23 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-view .pi-message-assistant {
   margin-right: auto;
 }
+.pi-phone-view .pi-message-assistant + .pi-message-user,
+.pi-phone-view .pi-delegation + .pi-message-user {
+  margin-top: 16px;
+}
+.pi-phone-view .pi-message:has(pre, table) {
+  max-width: 96%;
+}
 .pi-phone-view .pi-message-bubble {
   width: fit-content;
   max-width: 100%;
-  padding: 8px 11px;
-  border-radius: 15px;
+  padding: 10px 13px;
+  border-radius: 18px;
   background: var(--pi-bubble);
   color: var(--pi-ink);
   overflow-wrap: anywhere;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 .pi-phone-view .pi-message-user .pi-message-bubble {
   background: var(--pi-user-bubble);
@@ -440,14 +447,14 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-view .pi-composer-dock {
   flex: 0 0 auto;
   width: 100%;
-  padding: 6px 10px max(10px, env(safe-area-inset-bottom));
+  padding: 6px 12px max(10px, env(safe-area-inset-bottom));
   background: var(--pi-canvas);
 }
 .pi-phone-view .pi-chat-composer {
   width: 100%;
-  padding: 4px;
+  padding: 3px;
   border: 1px solid var(--pi-border);
-  border-radius: 28px;
+  border-radius: 26px;
   box-shadow: none;
 }
 .pi-phone-view .pi-composer-line {
@@ -459,10 +466,10 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   flex: 1;
   min-width: 0;
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   max-height: 128px;
   margin: 0;
-  padding: 7px 1px;
+  padding: 11px 1px;
   font-family: inherit;
   font-size: 16px;
   line-height: 22px;
@@ -472,18 +479,22 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   resize: none;
 }
 .pi-phone-view .pi-composer-line > .pi-icon-button {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  padding: 10px;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 12px;
   border-radius: 50%;
 }
 .pi-phone-view .pi-composer-line > .pi-icon-button:first-child {
   background: var(--pi-canvas);
   color: var(--pi-ink);
   box-shadow: none;
+}
+.pi-phone-view .pi-composer-line > .pi-icon-button svg {
+  width: 20px;
+  height: 20px;
 }
 .pi-phone-view button.pi-send-button {
   background: var(--pi-ink);
@@ -594,6 +605,8 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-settings {
   max-width: 640px;
+  min-width: 0;
+  font-family: var(--font-interface);
 }
 .pi-phone-settings h2 {
   margin-bottom: 16px;
@@ -607,6 +620,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-computer-card h3 {
   margin: 0;
   font-size: 17px;
+  color: var(--text-normal);
 }
 .pi-phone-computer-status {
   margin: 8px 0 18px;
@@ -632,7 +646,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-settings button,
 .pi-phone-modal button {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 12px;
 }
 .pi-phone-view button.mod-cta,
@@ -649,6 +663,8 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   cursor: pointer;
   font-size: 15px;
   font-weight: 500;
+  min-height: 44px;
+  align-content: center;
 }
 .pi-phone-setting-details p,
 .pi-phone-modal p {
@@ -709,9 +725,6 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
     transform: translateY(0);
   }
 }
-.pi-phone-favorites {
-  animation: pi-phone-enter 220ms ease-out both;
-}
 .pi-phone-home:not([hidden]),
 .pi-phone-messages:not([hidden]) {
   animation: pi-phone-enter 170ms ease-out both;
@@ -736,6 +749,6 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
     gap: 6px;
   }
   .pi-phone-view .pi-phone-messages {
-    padding-inline: 12px;
+    padding-inline: 14px;
   }
 }

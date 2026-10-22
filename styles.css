@@ -2,7 +2,7 @@
 .pi-settings,
 .pi-permission-card,
 .pi-config-modal {
-  font-family: Arial, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-interface), -apple-system, "Microsoft YaHei", sans-serif;
 }
 /* Delegation is part of the conversation, with the same quiet IM vocabulary. */
 .pi-conversation-source,
@@ -181,21 +181,27 @@
 .pi-settings {
   max-width: 860px;
   margin: 0 auto;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: pi-settings;
 }
 .pi-settings h2 {
   padding: 0;
-  font-size: 23px;
+  font-size: 22px;
   margin: 0 0 8px;
-  font-weight: 650;
+  font-weight: 600;
+  color: var(--text-normal);
 }
 .pi-settings h3 {
   padding: 0;
   font-size: 16px;
   font-weight: 600;
   margin: 25px 0 12px;
+  color: var(--text-normal);
 }
 .pi-settings-intro,
 .pi-settings .pi-muted {
+  max-width: 65ch;
   font-size: 13px;
   line-height: 1.6;
   color: var(--text-muted);
@@ -211,7 +217,8 @@
 }
 .pi-settings-tabs button {
   flex: 1 1 auto;
-  height: 34px;
+  min-height: 40px;
+  height: auto;
   padding: 0 10px;
   box-shadow: none;
   border: 0;
@@ -267,12 +274,23 @@
 .pi-settings .setting-item-control {
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 .pi-settings button,
 .pi-permission-card button {
   font-family: inherit;
-  font-size: 13px;
-  border-radius: 7px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+:is(.pi-settings, .pi-config-modal, .pi-agent-editor) button.mod-cta {
+  background: var(--text-normal);
+  color: var(--background-primary);
+  box-shadow: none;
+}
+:is(.pi-settings, .pi-config-modal, .pi-agent-editor) button.mod-cta:hover {
+  background: var(--text-normal);
+  filter: brightness(0.93);
 }
 .pi-settings input,
 .pi-settings select,
@@ -283,6 +301,7 @@
 .pi-settings textarea {
   min-height: 82px;
   width: 290px;
+  max-width: 100%;
 }
 .pi-settings-panel > p {
   font-size: 13px;
@@ -291,7 +310,7 @@
 .pi-permission-card {
   margin: 14px 0;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
 }
 .pi-permission-card > summary {
@@ -395,9 +414,23 @@
     transition: none;
   }
 }
-@media (max-width: 650px) {
+@container pi-settings (max-width: 560px) {
+  .pi-settings-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pi-settings-tabs button {
+    min-width: 0;
+    padding-inline: 6px;
+    white-space: normal;
+  }
   .pi-settings .setting-item {
     flex-wrap: wrap;
+    gap: 12px;
+  }
+  .pi-settings .setting-item-info {
+    flex-basis: 100%;
+    min-width: 0;
   }
   .pi-settings .setting-item-control {
     margin-left: auto;
@@ -407,7 +440,7 @@
 .pi-agent-view,
 .pi-contacts-view {
   --pi-ease: cubic-bezier(0.2, 0.75, 0.25, 1);
-  --pi-font: Arial, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --pi-font: var(--font-interface), -apple-system, "Microsoft YaHei", sans-serif;
   color: var(--text-normal);
   font-family: var(--pi-font);
   font-size: 14px;
@@ -446,9 +479,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   border-radius: 8px;
 }
 .pi-agent-view button.pi-icon-button,
@@ -458,9 +491,9 @@
   border: 0;
 }
 .pi-icon-button svg {
-  width: 17px;
-  height: 17px;
-  stroke-width: 1.7px;
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8px;
 }
 .pi-icon-button:hover,
 .pi-agent-view .pi-text-button:hover,
@@ -1034,8 +1067,8 @@
     box-shadow 160ms var(--pi-ease);
 }
 .pi-chat-composer:focus-within {
-  border-color: var(--background-modifier-border-focus);
-  box-shadow: 0 0 0 1px var(--background-modifier-border-focus);
+  border-color: color-mix(in srgb, var(--text-normal) 30%, var(--background-primary));
+  box-shadow: none;
 }
 .pi-chat-composer textarea {
   display: block;
@@ -1326,7 +1359,7 @@
   font-size: 14px;
 }
 .pi-settings textarea {
-  min-width: 230px;
+  min-width: min(230px, 100%);
   max-width: 100%;
 }
 .pi-prompt-settings .setting-item:has(textarea) {
@@ -1471,7 +1504,11 @@
 
 /* Reference geometry: compact roster, two-sided bubbles, one-line composer. */
 .pi-agent-view,
-.pi-contacts-view {
+.pi-contacts-view,
+.pi-settings,
+.pi-phone-settings,
+.pi-config-modal,
+.pi-agent-editor {
   --pi-canvas: var(--background-primary);
   --pi-panel: var(--background-secondary);
   --pi-bubble: color-mix(
@@ -1481,23 +1518,15 @@
   );
   --pi-user-bubble: #171717;
   --pi-user-ink: #ffffff;
-  --pi-selected: var(--background-modifier-hover);
+  --pi-selected: color-mix(in srgb, var(--text-normal) 9%, var(--background-primary));
   --pi-border: var(--background-modifier-border);
   --pi-ink: var(--text-normal);
   --pi-secondary: var(--text-muted);
   color: var(--pi-ink);
 }
-.theme-dark .pi-agent-view,
-.theme-dark .pi-contacts-view {
-  --pi-canvas: #0d0d0d;
-  --pi-panel: #171717;
-  --pi-bubble: #252525;
+.theme-dark :is(.pi-agent-view, .pi-contacts-view, .pi-settings, .pi-phone-settings, .pi-config-modal, .pi-agent-editor) {
   --pi-user-bubble: #eeeeee;
   --pi-user-ink: #151515;
-  --pi-selected: #343434;
-  --pi-border: #2d2d2d;
-  --pi-ink: #eeeeee;
-  --pi-secondary: #a3a3a3;
 }
 .workspace-leaf-content[data-type="pi-agent-chat"] .pi-agent-view {
   background: var(--pi-canvas);
@@ -1519,9 +1548,9 @@
   padding: 0;
 }
 .pi-contact-search input[type="search"] {
-  height: 32px;
+  height: 40px;
   padding-left: 29px;
-  border-radius: 7px;
+  border-radius: 12px;
   background: var(--pi-canvas);
   border: 1px solid var(--pi-border);
   font-size: 13px;
@@ -1530,7 +1559,7 @@
 .pi-contact-search-icon {
   position: absolute;
   left: 9px;
-  top: 8px;
+  top: 12px;
   display: flex;
   pointer-events: none;
   color: var(--pi-secondary);
@@ -1582,18 +1611,18 @@
   opacity: 0.8;
 }
 .pi-contacts-header .pi-icon-button {
-  width: 28px;
-  height: 28px;
-  flex-basis: 28px;
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
 }
 .pi-contact-list {
   padding: 0 6px 10px;
 }
 .pi-contacts-view button.pi-contact-row {
   min-height: 64px;
-  padding: 10px 10px;
-  gap: 11px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  gap: 12px;
+  border-radius: 12px;
   margin: 0;
   color: var(--pi-ink);
 }
@@ -1623,9 +1652,9 @@
   font-size: 12px;
 }
 .pi-agent-avatar {
-  width: 38px;
-  height: 38px;
-  flex-basis: 38px;
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
   border-radius: 50%;
   background: transparent;
   font-size: 23px;
@@ -1644,6 +1673,10 @@
 }
 .pi-agent-avatar.pi-avatar-art img {
   object-fit: contain;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .pi-avatar-picker {
   display: grid;
@@ -1711,11 +1744,12 @@
 .pi-agent-editor,
 .pi-agent-editor input,
 .pi-agent-editor textarea {
-  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  font-family: var(--font-interface), -apple-system, "Microsoft YaHei", sans-serif;
 }
 .pi-chat-header {
-  min-height: 48px;
-  padding: 8px 18px;
+  min-height: 56px;
+  padding: 8px 16px;
+  box-sizing: border-box;
   gap: 10px;
   border-color: var(--pi-border);
 }
@@ -1733,8 +1767,8 @@
   color: var(--pi-ink);
 }
 .pi-agent-identity strong {
-  font-size: 13px;
-  font-weight: 550;
+  font-size: 15px;
+  font-weight: 600;
 }
 .pi-header-description {
   display: none;
@@ -1743,17 +1777,17 @@
   gap: 2px;
 }
 .pi-header-actions .pi-icon-button {
-  width: 28px;
-  height: 28px;
-  flex-basis: 28px;
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
   color: var(--pi-secondary);
 }
 .pi-header-actions svg {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
 }
 .pi-chat-messages {
-  padding: 16px 22px 14px;
+  padding: 20px max(24px, calc((100% - 820px) / 2)) 16px;
 }
 .pi-timeline-time {
   display: block;
@@ -1765,27 +1799,35 @@
 }
 .pi-message {
   width: fit-content;
-  max-width: min(84%, 760px);
+  max-width: min(76%, 820px);
   margin: 0 0 8px;
-  padding: 9px 12px;
-  border-radius: 13px;
+  padding: 12px 16px;
+  border-radius: 18px;
+}
+.pi-message:has(pre, table) {
+  max-width: 96%;
+}
+.pi-message-assistant + .pi-message-user,
+.pi-chat-activity + .pi-message-user,
+.pi-delegation + .pi-message-user {
+  margin-top: 20px;
 }
 .pi-message-assistant {
   margin-right: auto;
   background: var(--pi-bubble);
   color: var(--pi-ink);
-  padding-bottom: 10px;
+  padding-bottom: 12px;
 }
 .pi-message-user {
   margin-left: auto;
   background: var(--pi-user-bubble);
   color: var(--pi-user-ink);
-  border-radius: 13px;
+  border-radius: 18px;
 }
 .pi-message-content,
 .pi-message-user .pi-message-content {
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   font-family: var(--pi-font);
 }
 .pi-message-user .pi-message-content {
@@ -1799,8 +1841,22 @@
   margin: 0 0 7px;
   font-family: inherit;
 }
+.pi-message-content :is(h1, h2, h3, h4, h5, h6) {
+  font-size: 17px;
+  line-height: 1.45;
+  margin: 12px 0 8px;
+  color: inherit;
+}
+.pi-message-content :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
 .pi-message-content p:last-child {
   margin-bottom: 0;
+}
+.pi-message-content a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .pi-copy-button {
   left: auto;
@@ -1831,11 +1887,11 @@
 }
 .pi-composer-dock {
   width: 100%;
-  padding: 8px 16px 14px;
+  padding: 8px max(16px, calc((100% - 820px) / 2)) 16px;
 }
 .pi-chat-composer {
-  padding: 5px 6px;
-  border-radius: 24px;
+  padding: 4px;
+  border-radius: 26px;
   border-color: var(--pi-border);
   background: var(--pi-canvas);
 }
@@ -1848,20 +1904,20 @@
 .pi-chat-composer textarea {
   flex: 1;
   min-width: 0;
-  min-height: 28px;
+  min-height: 40px;
   max-height: 160px;
-  padding: 4px 3px;
-  font-size: 14px;
-  line-height: 20px;
+  padding: 8px 4px;
+  font-size: 15px;
+  line-height: 24px;
   color: var(--pi-ink);
 }
 .pi-chat-composer textarea::placeholder {
   color: var(--pi-secondary);
 }
 .pi-composer-line > .pi-icon-button {
-  width: 28px;
-  height: 28px;
-  flex-basis: 28px;
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
   border-radius: 50%;
   color: var(--pi-secondary);
 }
@@ -1869,9 +1925,9 @@
   background: var(--pi-selected);
 }
 .pi-agent-view button.pi-send-button {
-  width: 28px;
-  height: 28px;
-  flex-basis: 28px;
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
   border-radius: 50%;
   background: var(--pi-ink);
   color: var(--pi-canvas);
@@ -1919,8 +1975,8 @@
 }
 @container pi-chat (max-width:460px) {
   .pi-chat-header {
-    min-height: 46px;
-    padding: 8px 12px;
+    min-height: 56px;
+    padding: 8px 10px;
   }
   .pi-chat-header .pi-agent-avatar {
     width: 23px;
@@ -1930,7 +1986,7 @@
     font-size: 13px;
   }
   .pi-agent-identity strong {
-    font-size: 13px;
+    font-size: 15px;
   }
   .pi-chat-messages {
     padding: 16px 14px 10px;
@@ -1939,12 +1995,54 @@
     padding: 8px 12px 14px;
   }
   .pi-message {
+    max-width: 96%;
+    padding: 10px 14px;
+  }
+  .pi-message {
     max-width: 90%;
   }
   .pi-welcome {
     min-height: 260px;
   }
 }
+/* Composer command palette: commands and parameters stay in one surface. */
+.pi-chat-composer { position: relative; }
+.pi-slash-menu {
+  position: absolute; inset: auto 0 calc(100% + 8px); z-index: 20;
+  display: flex; flex-direction: column; min-height: 0; max-height: min(380px, 48dvh);
+  border: 1px solid var(--background-modifier-border); border-radius: 12px;
+  background: var(--background-primary); color: var(--text-normal); box-shadow: var(--shadow-s);
+  overflow: hidden; text-align: left; animation: pi-command-open 110ms ease-out both;
+}
+.pi-slash-menu[hidden] { display: none; }
+.pi-slash-header { display: flex; align-items: center; gap: 7px; min-height: 34px; flex-shrink: 0; padding: 4px 12px; font-size: 13px; color: var(--text-muted); }
+.pi-slash-menu .pi-slash-back { border: 0; box-shadow: none; background: transparent; padding: 0; width: 32px; height: 32px; min-height: 32px; font-size: 25px; color: var(--text-normal); }
+.pi-slash-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 3px 5px; }
+.pi-slash-menu .pi-slash-row {
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 44px;
+  padding: 9px 11px; height: auto; border: 0; border-radius: 7px; box-shadow: none;
+  background: transparent; color: var(--text-normal); text-align: left; font-size: 14px;
+  transition: background 90ms ease, transform 90ms ease;
+}
+.pi-slash-menu .pi-slash-row[aria-selected="true"], .pi-slash-menu .pi-slash-row:hover { background: var(--background-modifier-hover); }
+.pi-slash-menu .pi-slash-row:active { transform: scale(.985); }
+.pi-slash-text { display: flex; flex: 1; min-width: 0; gap: 12px; align-items: baseline; }
+.pi-slash-name { font-weight: 500; overflow-wrap: anywhere; }
+.pi-slash-menu[data-mode="commands"] .pi-slash-name { min-width: 88px; font-family: var(--font-monospace); }
+.pi-slash-label { color: var(--text-muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.pi-slash-menu[data-mode="choices"] .pi-slash-text { flex-direction: column; align-items: flex-start; gap: 2px; }
+.pi-slash-current { flex-shrink: 0; color: var(--text-normal); }
+.pi-slash-menu .pi-slash-search { width: calc(100% - 20px); margin: 0 10px 5px; min-height: 36px; flex-shrink: 0; box-shadow: none; font-size: 16px; }
+.pi-slash-footer { padding: 7px 13px; font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.pi-slash-empty { padding: 12px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.pi-slash-empty.is-error { color: var(--text-error); }
+.pi-command-info { margin: 4px 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; line-height: 1.6; user-select: text; background: transparent; }
+.pi-message.pi-message-command { color: var(--text-muted); }
+.pi-phone-view .pi-slash-back { width: 44px; height: 40px; min-height: 40px; }
+.pi-phone-view .pi-slash-footer { display: none; }
+@keyframes pi-command-open { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .pi-slash-menu { animation: none; } .pi-slash-menu .pi-slash-row { transition: none; transform: none; } }
+
 /* Phone companion (source: src/mobile/mobile.css). */
 /* Phone UI: open roster, soft round controls, compact conversational rhythm. */
 /* Only the active phone workspace takes over chrome. Obsidian owns the
@@ -2252,7 +2350,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-contact-title time {
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--pi-secondary);
   font-weight: 400;
 }
@@ -2281,7 +2379,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  padding: 4px 12px 10px;
+  padding: 8px 16px 12px;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -2295,9 +2393,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   display: flex;
   flex-direction: column;
   width: fit-content;
-  max-width: 90%;
+  max-width: 88%;
   min-width: 0;
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2311,16 +2409,23 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-view .pi-message-assistant {
   margin-right: auto;
 }
+.pi-phone-view .pi-message-assistant + .pi-message-user,
+.pi-phone-view .pi-delegation + .pi-message-user {
+  margin-top: 16px;
+}
+.pi-phone-view .pi-message:has(pre, table) {
+  max-width: 96%;
+}
 .pi-phone-view .pi-message-bubble {
   width: fit-content;
   max-width: 100%;
-  padding: 8px 11px;
-  border-radius: 15px;
+  padding: 10px 13px;
+  border-radius: 18px;
   background: var(--pi-bubble);
   color: var(--pi-ink);
   overflow-wrap: anywhere;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 .pi-phone-view .pi-message-user .pi-message-bubble {
   background: var(--pi-user-bubble);
@@ -2388,14 +2493,14 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-view .pi-composer-dock {
   flex: 0 0 auto;
   width: 100%;
-  padding: 6px 10px max(10px, env(safe-area-inset-bottom));
+  padding: 6px 12px max(10px, env(safe-area-inset-bottom));
   background: var(--pi-canvas);
 }
 .pi-phone-view .pi-chat-composer {
   width: 100%;
-  padding: 4px;
+  padding: 3px;
   border: 1px solid var(--pi-border);
-  border-radius: 28px;
+  border-radius: 26px;
   box-shadow: none;
 }
 .pi-phone-view .pi-composer-line {
@@ -2407,10 +2512,10 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   flex: 1;
   min-width: 0;
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   max-height: 128px;
   margin: 0;
-  padding: 7px 1px;
+  padding: 11px 1px;
   font-family: inherit;
   font-size: 16px;
   line-height: 22px;
@@ -2420,18 +2525,22 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   resize: none;
 }
 .pi-phone-view .pi-composer-line > .pi-icon-button {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  padding: 10px;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 12px;
   border-radius: 50%;
 }
 .pi-phone-view .pi-composer-line > .pi-icon-button:first-child {
   background: var(--pi-canvas);
   color: var(--pi-ink);
   box-shadow: none;
+}
+.pi-phone-view .pi-composer-line > .pi-icon-button svg {
+  width: 20px;
+  height: 20px;
 }
 .pi-phone-view button.pi-send-button {
   background: var(--pi-ink);
@@ -2542,6 +2651,8 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-settings {
   max-width: 640px;
+  min-width: 0;
+  font-family: var(--font-interface);
 }
 .pi-phone-settings h2 {
   margin-bottom: 16px;
@@ -2555,6 +2666,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-computer-card h3 {
   margin: 0;
   font-size: 17px;
+  color: var(--text-normal);
 }
 .pi-phone-computer-status {
   margin: 8px 0 18px;
@@ -2580,7 +2692,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-settings button,
 .pi-phone-modal button {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 12px;
 }
 .pi-phone-view button.mod-cta,
@@ -2597,6 +2709,8 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   cursor: pointer;
   font-size: 15px;
   font-weight: 500;
+  min-height: 44px;
+  align-content: center;
 }
 .pi-phone-setting-details p,
 .pi-phone-modal p {
@@ -2657,9 +2771,6 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
     transform: translateY(0);
   }
 }
-.pi-phone-favorites {
-  animation: pi-phone-enter 220ms ease-out both;
-}
 .pi-phone-home:not([hidden]),
 .pi-phone-messages:not([hidden]) {
   animation: pi-phone-enter 170ms ease-out both;
@@ -2684,6 +2795,6 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
     gap: 6px;
   }
   .pi-phone-view .pi-phone-messages {
-    padding-inline: 12px;
+    padding-inline: 14px;
   }
 }
