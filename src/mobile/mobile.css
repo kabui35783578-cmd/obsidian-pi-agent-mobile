@@ -469,7 +469,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   min-height: 44px;
   max-height: 128px;
   margin: 0;
-  padding: 11px 1px;
+  padding: 11px 12px;
   font-family: inherit;
   font-size: 16px;
   line-height: 22px;
@@ -750,5 +750,109 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   }
   .pi-phone-view .pi-phone-messages {
     padding-inline: 14px;
+  }
+}
+
+/* Assistant picker shares the same flat contact rows as the home screen. */
+.pi-phone-picker {
+  --pi-picker-safe: max(
+    12px,
+    var(--safe-area-inset-top, 0px),
+    var(--safe-area-inset-bottom, 0px),
+    env(safe-area-inset-top, 0px),
+    env(safe-area-inset-bottom, 0px)
+  );
+  --pi-picker-side: max(
+    12px,
+    var(--safe-area-inset-left, 0px),
+    var(--safe-area-inset-right, 0px),
+    env(safe-area-inset-left, 0px),
+    env(safe-area-inset-right, 0px)
+  );
+  animation: pi-phone-enter 160ms ease-out;
+  border-radius: 24px;
+  max-width: min(480px, calc(100vw - 2 * var(--pi-picker-side)));
+  max-height: calc(100dvh - 2 * var(--pi-picker-safe) - 24px);
+}
+.pi-phone-picker .modal-title {
+  color: var(--text-normal);
+  padding-right: 36px;
+  font-size: 18px;
+  text-align: left;
+}
+.pi-phone-picker .modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.pi-phone-picker input[type="search"] {
+  flex-shrink: 0;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--background-secondary);
+  box-shadow: none;
+}
+.pi-phone-picker-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.pi-phone-modal.pi-phone-picker button.pi-phone-contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 68px;
+  height: auto;
+  padding: 10px 4px;
+  text-align: left;
+  white-space: normal;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+}
+.pi-phone-picker .pi-phone-contact-body {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.pi-phone-picker-name {
+  display: block;
+  color: var(--text-normal);
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-phone-picker .pi-phone-contact-preview {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.pi-phone-picker button.pi-phone-contact:hover,
+.pi-phone-picker button.pi-phone-contact:active {
+  background: var(--background-modifier-hover);
+}
+.pi-phone-favorite {
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.pi-phone-recent .pi-phone-contact {
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pi-phone-picker {
+    animation: none;
   }
 }

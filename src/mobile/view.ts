@@ -4,7 +4,6 @@ import {
   Notice,
   MarkdownRenderer,
   Component,
-  TFile,
   setIcon,
   Menu,
   type WorkspaceLeaf,
@@ -24,6 +23,7 @@ import { SlashMenu } from "../plugin/slash-menu.ts";
 import { handleSlashUI } from "../plugin/command-ui.ts";
 import { CommandDraft } from "../plugin/command-draft.ts";
 import { parseSlash } from "../shared/slash-commands.ts";
+import { errorText } from "../shared/types.ts";
 import type {
   AgentRecord,
   Conversation,
@@ -151,7 +151,6 @@ export class MobileChatView extends ItemView {
     const composer = this.footer.createDiv({ cls: "pi-chat-composer" });
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
     const line = composer.createDiv({ cls: "pi-composer-line" });
-    iconButton(line, "plus", "附加手机当前笔记副本", () => void this.attach());
     this.input = line.createEl("textarea", {
       attr: {
         rows: "1",
@@ -947,23 +946,6 @@ export class MobileChatView extends ItemView {
     }
     if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
   }
-  private async attach() {
-    try {
-      const file = this.plugin.lastNote;
-      if (!(file instanceof TFile) || file.extension !== "md")
-        throw Error("请先在手机打开一篇 Markdown 笔记，再回到聊天附加");
-      if (file.stat.size > 200_000)
-        throw Error("笔记较大，请先选取需要的内容粘贴到消息中");
-      const text = await this.app.vault.read(file);
-      if (text.length > 90_000)
-        throw Error("笔记超过 90000 字符，请精简后附加");
-      this.attachment = { path: file.path, text };
-      this.saveDraft();
-      this.controls();
-    } catch (e) {
-      this.fail(e);
-    }
-  }
   private async runSlash(text: string) {
     const command = parseSlash(text);
     if (!command || command.name.startsWith("skill:")) return false;
@@ -1224,19 +1206,20 @@ export class MobileChatView extends ItemView {
         ) ||
         a.name.localeCompare(b.name, "zh-CN"),
     );
-    const featured = query ? [] : agents.slice(0, 3);
+    const featured = query ? [] : this.pinnedAgents(agents);
     if (featured.length) {
       const favorites = this.homeList.createDiv({
         cls: "pi-phone-favorites",
-        attr: { "aria-label": "常用助手" },
+        attr: { "aria-label": "固定助手，长按调整" },
       });
       for (const agent of featured) {
         const button = favorites.createEl("button", {
           cls: "pi-phone-favorite",
-          attr: { "aria-label": "与" + agent.name + "聊天" },
+          attr: { "aria-label": "与" + agent.name + "聊天，长按调整固定" },
         });
         renderAvatar(button, this.app, agent);
         button.createSpan({ text: agent.name });
+        this.pinGesture(button, agent, featured);
         button.addEventListener("click", () => void this.selectAgent(agent));
       }
     }
@@ -1244,68 +1227,58 @@ export class MobileChatView extends ItemView {
       cls: "pi-phone-recent",
       attr: { "aria-label": "助手聊天" },
     });
-    const remaining = query
-      ? agents.filter((a) =>
-          [a.name, a.description, a.scope, latest(a.id)?.preview ?? ""]
-            .join(" ")
-            .toLocaleLowerCase()
-            .includes(query),
-        )
-      : agents.filter((a) => !featured.includes(a));
-    for (const agent of remaining) {
-      const summary = latest(agent.id);
-      const button = rows.createEl("button", {
-        cls: "pi-phone-contact",
-        attr: { "aria-label": "与" + agent.name + "聊天" },
-      });
-      renderAvatar(button, this.app, agent);
-      const body = button.createDiv({ cls: "pi-phone-contact-body" });
-      const title = body.createDiv({ cls: "pi-phone-contact-title" });
-      title.createEl("strong", { text: agent.name });
-      if (summary)
-        title.createEl("time", {
-          text: this.relativeTime(summary.updatedAt),
-          attr: { datetime: summary.updatedAt },
+    const matches = agents.filter(
+      (a) =>
+        !query ||
+        [a.name, a.description, a.scope, latest(a.id)?.preview ?? ""]
+          .join(" ")
+          .toLocaleLowerCase()
+          .includes(query),
+    );
+    const recent = matches
+      .filter((a) => latest(a.id))
+      .sort((a, b) =>
+        latest(b.id)!.updatedAt.localeCompare(latest(a.id)!.updatedAt),
+      );
+    const others = matches.filter((a) => !latest(a.id));
+    for (const [label, group] of [
+      ["最近聊天", recent],
+      ["其他助手", others],
+    ] as const) {
+      if (!group.length) continue;
+      if (!query) rows.createDiv({ cls: "pi-phone-list-label", text: label });
+      for (const agent of group) {
+        const summary = latest(agent.id);
+        const button = rows.createEl("button", {
+          cls: "pi-phone-contact",
+          attr: { "aria-label": "与" + agent.name + "聊天" },
         });
-      body.createDiv({
-        cls: "pi-phone-contact-preview",
-        text:
-          summary?.status === "running"
-            ? "正在处理…"
-            : summary?.preview ||
-              agent.description ||
-              (agent.scope ? "负责 " + agent.scope : "帮你处理笔记与日常任务"),
-      });
-      button.addEventListener("click", () => void this.selectAgent(agent));
-    }
-    // With only a few assistants, use the remaining space for actual recent chats.
-    if (!query && agents.length <= 3) {
-      const recent = this.summaries
-        .filter((c) => !c.archive && c.messageCount > 0)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, 12);
-      if (recent.length)
-        rows.createDiv({ cls: "pi-phone-list-label", text: "最近聊天" });
-      for (const item of recent) {
-        const agent = agents.find((a) => a.id === item.agentId);
-        if (!agent) continue;
-        const button = rows.createEl("button", { cls: "pi-phone-contact" });
+        button.dataset.agentId = agent.id;
         renderAvatar(button, this.app, agent);
         const body = button.createDiv({ cls: "pi-phone-contact-body" });
         const title = body.createDiv({ cls: "pi-phone-contact-title" });
-        title.createEl("strong", { text: item.title || agent.name });
-        title.createEl("time", { text: this.relativeTime(item.updatedAt) });
+        title.createEl("strong", { text: agent.name });
+        if (summary)
+          title.createEl("time", {
+            text: this.relativeTime(summary.updatedAt),
+            attr: { datetime: summary.updatedAt },
+          });
         body.createDiv({
           cls: "pi-phone-contact-preview",
-          text: item.preview || agent.name,
+          text:
+            summary?.status === "running"
+              ? "正在处理…"
+              : summary?.preview ||
+                agent.description ||
+                (agent.scope
+                  ? "负责 " + agent.scope
+                  : "帮你处理笔记与日常任务"),
         });
-        button.addEventListener(
-          "click",
-          () => void this.openConversation(item.id),
-        );
+        this.pinGesture(button, agent, this.pinnedAgents(agents));
+        button.addEventListener("click", () => void this.selectAgent(agent));
       }
     }
-    if (query && !remaining.length)
+    if (query && !matches.length)
       rows.createDiv({
         cls: "pi-phone-empty",
         text: "没有找到，试试助手名字或聊天内容。",
@@ -1315,6 +1288,123 @@ export class MobileChatView extends ItemView {
         cls: "pi-phone-empty",
         text: "还没有助手，请先在电脑打开 Pi Agent。",
       });
+  }
+  private pinnedAgents(agents: AgentRecord[]) {
+    const stored = this.app.loadLocalStorage(
+      this.plugin.localKey("pinned-agents"),
+    );
+    const ids = Array.isArray(stored)
+      ? [
+          ...new Set(
+            stored.filter((id): id is string => typeof id === "string"),
+          ),
+        ].slice(0, 3)
+      : [...agents]
+          .sort(
+            (a, b) =>
+              Number(b.role === "manager") - Number(a.role === "manager") ||
+              a.name.localeCompare(b.name, "zh-CN"),
+          )
+          .slice(0, 3)
+          .map((a) => a.id);
+    return ids
+      .map((id) => agents.find((a) => a.id === id))
+      .filter((a): a is AgentRecord => Boolean(a));
+  }
+  private savePins(ids: string[]) {
+    try {
+      const value = [...new Set(ids)].slice(0, 3);
+      this.app.saveLocalStorage(this.plugin.localKey("pinned-agents"), value);
+      this.renderHome();
+    } catch (error) {
+      new Notice("固定助手未保存：" + errorText(error));
+    }
+  }
+  private pinMenu(
+    agent: AgentRecord,
+    featured: AgentRecord[],
+    event: MouseEvent,
+  ) {
+    const menu = new Menu();
+    const ids = featured.map((a) => a.id);
+    if (ids.includes(agent.id))
+      menu.addItem((item) =>
+        item
+          .setTitle("取消固定到顶部")
+          .setIcon("pin-off")
+          .onClick(() => this.savePins(ids.filter((id) => id !== agent.id))),
+      );
+    else if (ids.length < 3)
+      menu.addItem((item) =>
+        item
+          .setTitle("固定到顶部")
+          .setIcon("pin")
+          .onClick(() => this.savePins([...ids, agent.id])),
+      );
+    else {
+      menu.addItem((item) =>
+        item.setTitle("替换一位顶部助手").setDisabled(true),
+      );
+      featured.forEach((current, index) =>
+        menu.addItem((item) =>
+          item
+            .setTitle("替换「" + current.name + "」")
+            .setIcon("pin")
+            .onClick(() =>
+              this.savePins(ids.map((id, i) => (i === index ? agent.id : id))),
+            ),
+        ),
+      );
+    }
+    menu.showAtMouseEvent(event);
+  }
+  private pinGesture(
+    button: HTMLButtonElement,
+    agent: AgentRecord,
+    featured: AgentRecord[],
+  ) {
+    let timer: ReturnType<typeof setTimeout> | undefined,
+      suppressClick = false,
+      x = 0,
+      y = 0;
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+    };
+    const open = (event: MouseEvent) => {
+      cancel();
+      suppressClick = true;
+      if (button.isConnected && !this.closed)
+        this.pinMenu(agent, featured, event);
+    };
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (!suppressClick) open(event);
+    });
+    button.addEventListener("pointerdown", (event) => {
+      cancel();
+      suppressClick = false;
+      if (event.pointerType === "mouse" || event.button !== 0) return;
+      x = event.clientX;
+      y = event.clientY;
+      timer = setTimeout(() => open(event), 500);
+    });
+    button.addEventListener("pointermove", (event) => {
+      if (Math.hypot(event.clientX - x, event.clientY - y) > 10) cancel();
+    });
+    for (const name of ["pointerup", "pointercancel", "pointerleave"])
+      button.addEventListener(name, cancel);
+    button.addEventListener(
+      "click",
+      (event) => {
+        if (suppressClick) {
+          suppressClick = false;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      },
+      true,
+    );
   }
   private relativeTime(value: string) {
     const date = new Date(value),
@@ -1401,13 +1491,13 @@ export class MobileChatView extends ItemView {
   private startChat() {
     const modal = new Modal(this.app);
     modal.titleEl.setText("与谁开始新聊天？");
-    modal.modalEl.addClass("pi-phone-modal");
+    modal.modalEl.addClass("pi-phone-modal", "pi-phone-picker");
     modal.contentEl.addClass("pi-phone-contacts");
     const search = modal.contentEl.createEl("input", {
       type: "search",
       attr: { placeholder: "搜索助手", "aria-label": "搜索助手" },
     });
-    const list = modal.contentEl.createDiv();
+    const list = modal.contentEl.createDiv({ cls: "pi-phone-picker-list" });
     const render = () => {
       list.empty();
       for (const agent of (this.plugin.client.description?.agents ??
@@ -1424,10 +1514,13 @@ export class MobileChatView extends ItemView {
         });
         row.toggleClass("is-active", agent.id === this.agent?.id);
         renderAvatar(row, this.app, agent);
-        const identity = row.createDiv();
-        identity.createEl("strong", { text: agent.name });
+        const identity = row.createDiv({ cls: "pi-phone-contact-body" });
+        identity.createEl("strong", {
+          cls: "pi-phone-picker-name",
+          text: agent.name,
+        });
         identity.createDiv({
-          cls: "pi-muted",
+          cls: "pi-muted pi-phone-contact-preview",
           text: agent.description || agent.scope || "总管",
         });
         row.addEventListener("click", () => {
@@ -1439,6 +1532,7 @@ export class MobileChatView extends ItemView {
     search.addEventListener("input", render);
     render();
     modal.open();
+    return modal;
   }
   private profile() {
     if (!this.agent) return;

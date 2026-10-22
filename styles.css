@@ -2,7 +2,11 @@
 .pi-settings,
 .pi-permission-card,
 .pi-config-modal {
-  font-family: var(--font-interface), -apple-system, "Microsoft YaHei", sans-serif;
+  font-family:
+    var(--font-interface),
+    -apple-system,
+    "Microsoft YaHei",
+    sans-serif;
 }
 /* Delegation is part of the conversation, with the same quiet IM vocabulary. */
 .pi-conversation-source,
@@ -440,7 +444,8 @@
 .pi-agent-view,
 .pi-contacts-view {
   --pi-ease: cubic-bezier(0.2, 0.75, 0.25, 1);
-  --pi-font: var(--font-interface), -apple-system, "Microsoft YaHei", sans-serif;
+  --pi-font:
+    var(--font-interface), -apple-system, "Microsoft YaHei", sans-serif;
   color: var(--text-normal);
   font-family: var(--pi-font);
   font-size: 14px;
@@ -1067,7 +1072,11 @@
     box-shadow 160ms var(--pi-ease);
 }
 .pi-chat-composer:focus-within {
-  border-color: color-mix(in srgb, var(--text-normal) 30%, var(--background-primary));
+  border-color: color-mix(
+    in srgb,
+    var(--text-normal) 30%,
+    var(--background-primary)
+  );
   box-shadow: none;
 }
 .pi-chat-composer textarea {
@@ -1518,13 +1527,25 @@
   );
   --pi-user-bubble: #171717;
   --pi-user-ink: #ffffff;
-  --pi-selected: color-mix(in srgb, var(--text-normal) 9%, var(--background-primary));
+  --pi-selected: color-mix(
+    in srgb,
+    var(--text-normal) 9%,
+    var(--background-primary)
+  );
   --pi-border: var(--background-modifier-border);
   --pi-ink: var(--text-normal);
   --pi-secondary: var(--text-muted);
   color: var(--pi-ink);
 }
-.theme-dark :is(.pi-agent-view, .pi-contacts-view, .pi-settings, .pi-phone-settings, .pi-config-modal, .pi-agent-editor) {
+.theme-dark
+  :is(
+    .pi-agent-view,
+    .pi-contacts-view,
+    .pi-settings,
+    .pi-phone-settings,
+    .pi-config-modal,
+    .pi-agent-editor
+  ) {
   --pi-user-bubble: #eeeeee;
   --pi-user-ink: #151515;
 }
@@ -1744,7 +1765,11 @@
 .pi-agent-editor,
 .pi-agent-editor input,
 .pi-agent-editor textarea {
-  font-family: var(--font-interface), -apple-system, "Microsoft YaHei", sans-serif;
+  font-family:
+    var(--font-interface),
+    -apple-system,
+    "Microsoft YaHei",
+    sans-serif;
 }
 .pi-chat-header {
   min-height: 56px;
@@ -2006,42 +2031,351 @@
   }
 }
 /* Composer command palette: commands and parameters stay in one surface. */
-.pi-chat-composer { position: relative; }
+.pi-chat-composer {
+  position: relative;
+}
 .pi-slash-menu {
-  position: absolute; inset: auto 0 calc(100% + 8px); z-index: 20;
-  display: flex; flex-direction: column; min-height: 0; max-height: min(380px, 48dvh);
-  border: 1px solid var(--background-modifier-border); border-radius: 12px;
-  background: var(--background-primary); color: var(--text-normal); box-shadow: var(--shadow-s);
-  overflow: hidden; text-align: left; animation: pi-command-open 110ms ease-out both;
+  position: absolute;
+  inset: auto 0 calc(100% + 8px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(380px, 48dvh);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: var(--shadow-s);
+  overflow: hidden;
+  text-align: left;
+  animation: pi-command-open 110ms ease-out both;
 }
-.pi-slash-menu[hidden] { display: none; }
-.pi-slash-header { display: flex; align-items: center; gap: 7px; min-height: 34px; flex-shrink: 0; padding: 4px 12px; font-size: 13px; color: var(--text-muted); }
-.pi-slash-menu .pi-slash-back { border: 0; box-shadow: none; background: transparent; padding: 0; width: 32px; height: 32px; min-height: 32px; font-size: 25px; color: var(--text-normal); }
-.pi-slash-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 3px 5px; }
+.pi-slash-menu[hidden] {
+  display: none;
+}
+.pi-slash-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  flex-shrink: 0;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.pi-slash-menu .pi-slash-back {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  font-size: 25px;
+  color: var(--text-normal);
+}
+.pi-slash-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 3px 5px;
+}
 .pi-slash-menu .pi-slash-row {
-  display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 44px;
-  padding: 9px 11px; height: auto; border: 0; border-radius: 7px; box-shadow: none;
-  background: transparent; color: var(--text-normal); text-align: left; font-size: 14px;
-  transition: background 90ms ease, transform 90ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  height: auto;
+  border: 0;
+  border-radius: 7px;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-normal);
+  text-align: left;
+  font-size: 14px;
+  transition:
+    background 90ms ease,
+    transform 90ms ease;
 }
-.pi-slash-menu .pi-slash-row[aria-selected="true"], .pi-slash-menu .pi-slash-row:hover { background: var(--background-modifier-hover); }
-.pi-slash-menu .pi-slash-row:active { transform: scale(.985); }
-.pi-slash-text { display: flex; flex: 1; min-width: 0; gap: 12px; align-items: baseline; }
-.pi-slash-name { font-weight: 500; overflow-wrap: anywhere; }
-.pi-slash-menu[data-mode="commands"] .pi-slash-name { min-width: 88px; font-family: var(--font-monospace); }
-.pi-slash-label { color: var(--text-muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
-.pi-slash-menu[data-mode="choices"] .pi-slash-text { flex-direction: column; align-items: flex-start; gap: 2px; }
-.pi-slash-current { flex-shrink: 0; color: var(--text-normal); }
-.pi-slash-menu .pi-slash-search { width: calc(100% - 20px); margin: 0 10px 5px; min-height: 36px; flex-shrink: 0; box-shadow: none; font-size: 16px; }
-.pi-slash-footer { padding: 7px 13px; font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
-.pi-slash-empty { padding: 12px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
-.pi-slash-empty.is-error { color: var(--text-error); }
-.pi-command-info { margin: 4px 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; line-height: 1.6; user-select: text; background: transparent; }
-.pi-message.pi-message-command { color: var(--text-muted); }
-.pi-phone-view .pi-slash-back { width: 44px; height: 40px; min-height: 40px; }
-.pi-phone-view .pi-slash-footer { display: none; }
-@keyframes pi-command-open { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .pi-slash-menu { animation: none; } .pi-slash-menu .pi-slash-row { transition: none; transform: none; } }
+.pi-slash-menu .pi-slash-row[aria-selected="true"],
+.pi-slash-menu .pi-slash-row:hover {
+  background: var(--background-modifier-hover);
+}
+.pi-slash-menu .pi-slash-row:active {
+  transform: scale(0.985);
+}
+.pi-slash-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 12px;
+  align-items: baseline;
+}
+.pi-slash-name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.pi-slash-menu[data-mode="commands"] .pi-slash-name {
+  min-width: 88px;
+  font-family: var(--font-monospace);
+}
+.pi-slash-label {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.pi-slash-menu[data-mode="choices"] .pi-slash-text {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.pi-slash-current {
+  flex-shrink: 0;
+  color: var(--text-normal);
+}
+.pi-slash-menu .pi-slash-search {
+  width: calc(100% - 20px);
+  margin: 0 10px 5px;
+  min-height: 36px;
+  flex-shrink: 0;
+  box-shadow: none;
+  font-size: 16px;
+}
+.pi-slash-footer {
+  padding: 7px 13px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.pi-slash-empty {
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.pi-slash-empty.is-error {
+  color: var(--text-error);
+}
+.pi-command-info {
+  margin: 4px 8px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  user-select: text;
+  background: transparent;
+}
+.pi-message.pi-message-command {
+  color: var(--text-muted);
+}
+.pi-phone-view .pi-slash-back {
+  width: 44px;
+  height: 40px;
+  min-height: 40px;
+}
+.pi-phone-view .pi-slash-footer {
+  display: none;
+}
+@keyframes pi-command-open {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pi-slash-menu {
+    animation: none;
+  }
+  .pi-slash-menu .pi-slash-row {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Desktop composer: write above, task controls below. */
+.pi-desktop-chat .pi-chat-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.pi-desktop-chat .pi-chat-composer {
+  padding: 12px;
+  border-radius: 24px;
+  background: var(--pi-bubble);
+}
+.pi-desktop-chat .pi-composer-editor textarea {
+  min-height: 48px;
+  padding: 2px 4px 8px;
+  background: transparent;
+}
+.pi-desktop-chat .pi-composer-controls {
+  gap: 8px;
+  min-width: 0;
+}
+.pi-desktop-chat .pi-composer-actions {
+  flex: 0 1 auto;
+  gap: 4px;
+}
+.pi-desktop-chat .pi-composer-submit {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: 3px;
+}
+.pi-desktop-chat .pi-composer-actions > .pi-icon-button {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  border-radius: 50%;
+}
+.pi-desktop-chat button.pi-permission-button,
+.pi-desktop-chat button.pi-model-button,
+.pi-desktop-chat button.pi-thinking-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 200px;
+  height: 36px;
+  margin: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--pi-secondary);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pi-desktop-chat button.pi-model-button {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pi-desktop-chat button.pi-model-button .pi-control-chevron {
+  display: inline-flex;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+.pi-desktop-chat button.pi-permission-button {
+  flex-shrink: 0;
+  color: var(--pi-ink);
+}
+.pi-permission-button svg {
+  width: 15px;
+  height: 15px;
+}
+.pi-control-chevron svg {
+  width: 12px;
+  height: 12px;
+}
+.pi-desktop-chat button.pi-permission-button:hover,
+.pi-desktop-chat button.pi-model-button:hover,
+.pi-desktop-chat button.pi-thinking-button:hover {
+  background: var(--pi-selected);
+  color: var(--pi-ink);
+}
+.pi-desktop-chat button.pi-send-button {
+  margin-left: 5px;
+  flex-shrink: 0;
+}
+.pi-desktop-chat .pi-chat-stage {
+  transition: padding 180ms ease-out;
+}
+.pi-desktop-chat.is-empty-chat .pi-chat-stage {
+  justify-content: center;
+  padding-bottom: clamp(0px, 7cqh, 60px);
+  overflow: auto;
+}
+.pi-desktop-chat.is-empty-chat .pi-chat-messages {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+  padding-top: 16px;
+  padding-bottom: 0;
+}
+.pi-desktop-chat.is-empty-chat .pi-welcome {
+  min-height: 0;
+  padding: 0 0 20px;
+}
+.pi-desktop-chat.is-empty-chat .pi-welcome h2 {
+  margin: 0 0 8px;
+  font-size: clamp(22px, 3cqw, 28px);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--pi-ink);
+}
+.pi-desktop-chat.is-empty-chat .pi-welcome p {
+  margin: 0;
+  max-width: 48ch;
+}
+.pi-desktop-chat.is-empty-chat .pi-composer-dock {
+  flex: 0 0 auto;
+}
+.pi-start-suggestions {
+  padding-top: 14px;
+}
+.pi-start-suggestions[hidden] {
+  display: none;
+}
+@container pi-chat (max-width:460px) {
+  .pi-desktop-chat .pi-chat-composer {
+    padding: 9px;
+    border-radius: 20px;
+  }
+  .pi-desktop-chat .pi-composer-controls {
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .pi-desktop-chat .pi-composer-submit {
+    min-width: 0;
+  }
+  .pi-desktop-chat button.pi-model-button {
+    max-width: 120px;
+    font-size: 12px;
+  }
+  .pi-desktop-chat button.pi-permission-button {
+    font-size: 12px;
+    gap: 4px;
+    padding: 0 3px;
+  }
+  .pi-desktop-chat button.pi-thinking-button {
+    font-size: 12px;
+    padding: 0 3px;
+  }
+  .pi-desktop-chat .pi-composer-actions {
+    gap: 1px;
+  }
+  .pi-desktop-chat button.pi-send-button {
+    margin-left: 1px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pi-desktop-chat .pi-chat-stage {
+    transition: none;
+  }
+}
+
+.pi-desktop-chat .pi-start-suggestions .pi-suggestion {
+  border: 0;
+  border-radius: 14px;
+  background: var(--pi-bubble);
+  color: var(--pi-ink);
+}
 
 /* Phone companion (source: src/mobile/mobile.css). */
 /* Phone UI: open roster, soft round controls, compact conversational rhythm. */
@@ -2515,7 +2849,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   min-height: 44px;
   max-height: 128px;
   margin: 0;
-  padding: 11px 1px;
+  padding: 11px 12px;
   font-family: inherit;
   font-size: 16px;
   line-height: 22px;
@@ -2796,5 +3130,109 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   }
   .pi-phone-view .pi-phone-messages {
     padding-inline: 14px;
+  }
+}
+
+/* Assistant picker shares the same flat contact rows as the home screen. */
+.pi-phone-picker {
+  --pi-picker-safe: max(
+    12px,
+    var(--safe-area-inset-top, 0px),
+    var(--safe-area-inset-bottom, 0px),
+    env(safe-area-inset-top, 0px),
+    env(safe-area-inset-bottom, 0px)
+  );
+  --pi-picker-side: max(
+    12px,
+    var(--safe-area-inset-left, 0px),
+    var(--safe-area-inset-right, 0px),
+    env(safe-area-inset-left, 0px),
+    env(safe-area-inset-right, 0px)
+  );
+  animation: pi-phone-enter 160ms ease-out;
+  border-radius: 24px;
+  max-width: min(480px, calc(100vw - 2 * var(--pi-picker-side)));
+  max-height: calc(100dvh - 2 * var(--pi-picker-safe) - 24px);
+}
+.pi-phone-picker .modal-title {
+  color: var(--text-normal);
+  padding-right: 36px;
+  font-size: 18px;
+  text-align: left;
+}
+.pi-phone-picker .modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.pi-phone-picker input[type="search"] {
+  flex-shrink: 0;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--background-secondary);
+  box-shadow: none;
+}
+.pi-phone-picker-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.pi-phone-modal.pi-phone-picker button.pi-phone-contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 68px;
+  height: auto;
+  padding: 10px 4px;
+  text-align: left;
+  white-space: normal;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+}
+.pi-phone-picker .pi-phone-contact-body {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.pi-phone-picker-name {
+  display: block;
+  color: var(--text-normal);
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-phone-picker .pi-phone-contact-preview {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.pi-phone-picker button.pi-phone-contact:hover,
+.pi-phone-picker button.pi-phone-contact:active {
+  background: var(--background-modifier-hover);
+}
+.pi-phone-favorite {
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.pi-phone-recent .pi-phone-contact {
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pi-phone-picker {
+    animation: none;
   }
 }
