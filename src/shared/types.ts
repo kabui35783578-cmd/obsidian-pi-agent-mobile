@@ -30,6 +30,7 @@ export interface McpServerConfig {
   name: string;
   purpose?: string;
   capabilities?: string;
+  /** Legacy metadata, retained for config compatibility; not sent to the model. */
   target?: string;
   targetVault?: string;
   transport: "stdio" | "http";

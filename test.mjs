@@ -7,7 +7,7 @@ const bundle = await fs.readFile("main.js", "utf8");
 test("BRAT three-file entry loads with only the Obsidian API", () => {
   const module = { exports: {} };
   const calls = [];
-  const api = { Plugin: class {}, ItemView: class {}, Modal: class {}, PluginSettingTab: class {} };
+  const api = { Plugin: class {}, Component: class {}, ItemView: class {}, Modal: class {}, PluginSettingTab: class {} };
   runInNewContext(bundle, {
     module, exports: module.exports, crypto: webcrypto,
     require(name) { calls.push(name); assert.equal(name, "obsidian"); return api; },

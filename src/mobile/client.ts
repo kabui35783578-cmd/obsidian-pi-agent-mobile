@@ -161,6 +161,8 @@ export class MobileClient {
     this.listeners.clear();
   }
   private async poll(generation: number) {
+    const previousConnected = this.connected,
+      previousStatus = this.status;
     try {
       const batch = await this.call("events.poll", {
         after: this.cursor,
@@ -187,7 +189,8 @@ export class MobileClient {
         (error instanceof Error ? error.message : String(error));
     }
     if (generation !== this.generation || this.paused) return;
-    this.emit({ type: "connection" });
+    if (this.connected !== previousConnected || this.status !== previousStatus)
+      this.emit({ type: "connection" });
     this.timer = setTimeout(
       () => void this.poll(generation),
       this.failures

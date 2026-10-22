@@ -18,6 +18,8 @@ import {
 } from "../plugin/ui-elements.ts";
 import { MOBILE_AVATARS } from "./avatar-data.ts";
 import { remoteId } from "../shared/mobile-wire.ts";
+import { latestByAgent } from "../shared/conversation-ui.ts";
+import { MarkdownCache } from "../plugin/markdown-cache.ts";
 import type {
   AgentRecord,
   Conversation,
@@ -75,11 +77,15 @@ export class MobileChatView extends ItemView {
   private homeMode = true;
   private summaries: ConversationSummary[] = [];
   private homeRevision = 0;
+  private markdownCache: MarkdownCache;
+  private previousRunning?: boolean;
+  private shownAttachment?: string;
   constructor(
     leaf: WorkspaceLeaf,
     readonly plugin: MobilePlugin,
   ) {
     super(leaf);
+    this.markdownCache = this.addChild(new MarkdownCache(this.app));
   }
   getViewType() {
     return MOBILE_VIEW;
@@ -92,6 +98,8 @@ export class MobileChatView extends ItemView {
   }
   async onOpen() {
     this.closed = false;
+    this.previousRunning = undefined;
+    this.shownAttachment = undefined;
     const el = this.contentEl;
     el.empty();
     el.addClass("pi-agent-view", "pi-phone-view");
@@ -165,6 +173,7 @@ export class MobileChatView extends ItemView {
     else this.welcome();
   }
   async onClose() {
+    this.markdownCache.clear();
     this.closed = true;
     this.generation++;
     this.homeRevision++;
@@ -272,7 +281,8 @@ export class MobileChatView extends ItemView {
   private controls() {
     if (!this.statusEl) return;
     const client = this.plugin.client;
-    this.statusEl.setText(this.error || client.status);
+    const status = this.error || client.status;
+    if (this.statusEl.textContent !== status) this.statusEl.setText(status);
     this.statusEl.hidden =
       !this.error &&
       (client.connected || (this.homeMode && !client.credential));
@@ -284,7 +294,10 @@ export class MobileChatView extends ItemView {
       Boolean(this.error) || !client.connected,
     );
     const running = this.conversation?.status === "running";
-    setIcon(this.sendButton, running ? "square" : "arrow-up");
+    if (running !== this.previousRunning) {
+      setIcon(this.sendButton, running ? "square" : "arrow-up");
+      this.previousRunning = running;
+    }
     this.sendButton.setAttribute(
       "aria-label",
       running ? "停止电脑任务" : "发送给电脑",
@@ -299,6 +312,8 @@ export class MobileChatView extends ItemView {
     this.input.placeholder = this.conversation?.archive
       ? "已归档，点助手名开始新聊天"
       : "问问" + (this.agent?.name ?? "电脑助手") + "…";
+    if (this.shownAttachment === (this.attachment?.path ?? "")) return;
+    this.shownAttachment = this.attachment?.path ?? "";
     this.attachmentEl.empty();
     if (this.attachment) {
       const button = this.attachmentEl.createEl("button", {
@@ -522,6 +537,7 @@ export class MobileChatView extends ItemView {
                 (a: AgentRecord) => a.id === this.agent!.id,
               );
             this.renderHeader();
+            if (this.homeMode) void this.refreshHome();
           })
           .catch((e) => this.fail(e))
           .finally(() => {
@@ -534,7 +550,11 @@ export class MobileChatView extends ItemView {
         text: (before?.text ?? "") + event.delta,
         seq: event.remoteSequence,
       });
-      if (!this.streamTimer)
+      if (
+        !this.homeMode &&
+        this.streamNodes.has(event.conversationId) &&
+        !this.streamTimer
+      )
         this.streamTimer = setTimeout(() => {
           this.streamTimer = undefined;
           this.flushStreams();
@@ -584,6 +604,8 @@ export class MobileChatView extends ItemView {
   private renderMessages() {
     const c = this.conversation;
     if (!c) return;
+    this.markdownCache.reset(c.id);
+    const retained = new Set<string>();
     const follow =
       this.timeline.scrollHeight -
         this.timeline.scrollTop -
@@ -661,13 +683,25 @@ export class MobileChatView extends ItemView {
           cls: "pi-message-origin",
           text: sourceName(message.origin ?? c.source),
         });
-      const bubble = row.createDiv({
-        cls: "pi-message-bubble markdown-rendered",
-      });
       // User text is a literal instruction; assistant Markdown links open the
       // remote read-only note viewer rather than a same-named local note.
-      if (message.role === "user") bubble.setText(message.text);
-      else this.markdown(message.text, bubble);
+      if (message.role === "user")
+        row.createDiv({
+          cls: "pi-message-bubble markdown-rendered",
+          text: message.text,
+        });
+      else {
+        const key = String(index + ((c as any).messageOffset ?? 0));
+        retained.add(key);
+        const body = this.markdownCache.render(
+          key,
+          safeMarkdown(message.text),
+          "",
+          row,
+          "pi-message-bubble markdown-rendered",
+        );
+        void body.ready;
+      }
       for (const record of c.delegations ?? [])
         if (record.messageIndex === index + ((c as any).messageOffset ?? 0))
           this.delegation(record);
@@ -715,6 +749,7 @@ export class MobileChatView extends ItemView {
         cancelled: "任务已停止，已完成的修改保留",
       }[c.status],
     });
+    this.markdownCache.retain(retained);
     if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
     else
       this.timeline.scrollTop = Math.max(
@@ -944,10 +979,8 @@ export class MobileChatView extends ItemView {
     if (!this.homeList) return;
     this.homeList.empty();
     const query = this.homeSearch.value.trim().toLocaleLowerCase();
-    const latest = (id: string) =>
-      this.summaries
-        .filter((c) => c.agentId === id && !c.archive && c.messageCount > 0)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    const latestMap = latestByAgent(this.summaries);
+    const latest = (id: string) => latestMap.get(id);
     const agents = [
       ...(this.plugin.client.description?.agents ?? []),
     ] as AgentRecord[];

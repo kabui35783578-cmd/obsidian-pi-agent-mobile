@@ -106,6 +106,7 @@ export const toolLabel = (name: string) =>
     vault_rename: "移动或重命名",
     vault_trash: "移入回收站",
     list_agents: "查看助手",
+    create_agent: "创建助手",
     delegate_task: "交给专属助手",
     read_skill: "读取技能",
     tool_search: "按需发现服务工具",
