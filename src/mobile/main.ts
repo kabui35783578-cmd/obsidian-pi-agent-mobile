@@ -108,6 +108,9 @@ export default class MobilePlugin extends Plugin {
     this.register(() => this.client.close());
     this.app.workspace.onLayoutReady(() => {
       this.syncMobileChrome();
+      // Obsidian may restore the chat as the active tab from its saved layout.
+      if (this.app.workspace.activeLeaf?.view.getViewType() === MOBILE_VIEW)
+        void this.leaveChat();
       void this.restore().catch((error) => new Notice(String(error)));
     });
   }
@@ -129,7 +132,6 @@ export default class MobilePlugin extends Plugin {
         this.client.resume();
       }
     }
-    await this.openChat();
   }
   async pair(code: string, name: string) {
     if (!this.app.secretStorage)
