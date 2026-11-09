@@ -56,7 +56,7 @@ export class MobileClient {
     );
     let timer: ReturnType<typeof setTimeout> | undefined;
     const response = await Promise.race([
-      relay ? relayExchange(relay, request) : this.transport(endpoint + REMOTE_PATH, request),
+      relay ? relayExchange(endpoint, relay, request) : this.transport(endpoint + REMOTE_PATH, request),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
           () => reject(Error("电脑连接超时，请检查同一网络、VPN 和防火墙")),

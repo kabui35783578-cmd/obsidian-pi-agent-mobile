@@ -1,9 +1,9 @@
 {
   "id": "pi-agent-mobile",
   "name": "Obot Mobile",
-  "version": "0.2.6-beta.1",
+  "version": "0.2.6-beta.2",
   "minAppVersion": "1.11.4",
-  "description": "Mobile companion for Obot, with experimental encrypted remote connection.",
+  "description": "Mobile companion for Obot, supporting a self-hosted encrypted relay.",
   "author": "Pi Agent contributors",
   "isDesktopOnly": false
 }

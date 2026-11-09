@@ -137,8 +137,18 @@ export function remoteEndpoint(value: string) {
   return url.origin;
 }
 export function validateRelay(relay: PairCode["relay"], endpoint: string) {
-  if (relay && (endpoint !== "https://relay.paseo.sh" || !/^obot-[a-f0-9-]{36}$/.test(relay.route) || typeof relay.key !== "string" || !/^[A-Za-z0-9+/_=-]{42,48}$/.test(relay.key))) throw Error("远程连接资料无效");
+  if (relay) {
+    const url = new URL(remoteEndpoint(endpoint));
+    const hostname = url.hostname.replace(/\.$/, "").toLowerCase();
+    const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(hostname);
+    if ((url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) || hostname === "paseo.sh" || hostname.endsWith(".paseo.sh") || !/^obot-[a-f0-9-]{36}$/.test(relay.route) || typeof relay.key !== "string" || !/^[A-Za-z0-9+/_=-]{42,48}$/.test(relay.key)) throw Error("远程连接资料无效：请使用自己的 HTTPS 中转地址");
+  }
   return relay;
+}
+export function relayEndpoint(value: string) {
+  const endpoint = remoteEndpoint(value);
+  validateRelay({route: "obot-00000000-0000-0000-0000-000000000000", key: "A".repeat(43) + "="}, endpoint);
+  return endpoint;
 }
 export function encodePairCode(value: PairCode) {
   return "pi-agent:" + bytes64(new TextEncoder().encode(JSON.stringify(value)));

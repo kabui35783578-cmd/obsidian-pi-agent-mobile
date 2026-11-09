@@ -1,8 +1,9 @@
 import { createClientChannel, type Transport } from "@getpaseo/relay/e2ee";
-import type { Envelope } from "./mobile-wire.ts";
+import { relayEndpoint, type Envelope } from "./mobile-wire.ts";
 
-export function relaySocket(route: string, role: "server" | "client", connectionId?: string) {
-  const url = new URL("wss://relay.paseo.sh/ws");
+export function relaySocket(endpoint: string, route: string, role: "server" | "client", connectionId?: string) {
+  const url = new URL("/ws", relayEndpoint(endpoint));
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("serverId", route);
   url.searchParams.set("role", role);
   url.searchParams.set("v", "2");
@@ -26,9 +27,9 @@ export function relayAdapter(ws: WebSocket): Transport {
   return transport;
 }
 
-export function relayExchange(relay: { route: string; key: string }, envelope: Envelope): Promise<Envelope> {
+export function relayExchange(endpoint: string, relay: { route: string; key: string }, envelope: Envelope): Promise<Envelope> {
   return new Promise((resolve, reject) => {
-    const ws = relaySocket(relay.route, "client"), transport = relayAdapter(ws);
+    const ws = relaySocket(endpoint, relay.route, "client"), transport = relayAdapter(ws);
     let finished = false;
     const finish = (error?: Error, value?: Envelope) => {
       if (finished) return;
