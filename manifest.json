@@ -1,9 +1,9 @@
 {
   "id": "pi-agent-mobile",
-  "name": "Pi Agent Mobile",
-  "version": "0.2.6",
+  "name": "Obot Mobile",
+  "version": "0.2.6-beta.1",
   "minAppVersion": "1.11.4",
-  "description": "Mobile companion for a desktop Pi Agent: chat, delegation and shared history over LAN or VPN. Testing release.",
+  "description": "Mobile companion for Obot, with experimental encrypted remote connection.",
   "author": "Pi Agent contributors",
   "isDesktopOnly": false
 }

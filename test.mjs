@@ -9,7 +9,7 @@ test("BRAT three-file entry loads with only the Obsidian API", () => {
   const calls = [];
   const api = { Plugin: class {}, Component: class {}, ItemView: class {}, Modal: class {}, PluginSettingTab: class {} };
   runInNewContext(bundle, {
-    module, exports: module.exports, crypto: webcrypto,
+    module, exports: module.exports, crypto: webcrypto, TextEncoder, TextDecoder,
     require(name) { calls.push(name); assert.equal(name, "obsidian"); return api; },
   });
   const plugin = new module.exports.default();

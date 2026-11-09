@@ -1,6 +1,6 @@
-# Pi Agent Mobile · 测试版
+# Obot Mobile · 远程连接测试版
 
-当前测试版本 **0.2.6**：修复首页漏掉顶部助手的聊天；支持长按固定最多三位助手，统一新聊天选择页，暂时隐藏手机笔记附件入口。保留工作过程归属与安全区适配。更新说明见 [UI-CHANGELOG.md](UI-CHANGELOG.md)。
+测试版本 **0.2.6-beta.1**：新增通过 Paseo 官方中转的加密远程连接。请配合支持远程配对的电脑端 Obot 测试；手机真机及不同运营商网络尚需验证。
 
 Android / iPhone 上的 Obsidian 交互插件：手机聊天，电脑执行模型、Skills、MCP、笔记与命令任务。
 
@@ -15,9 +15,9 @@ Android / iPhone 上的 Obsidian 交互插件：手机聊天，电脑执行模�
    kabui35783578-cmd/obsidian-pi-agent-mobile
    ```
 
-3. 选择测试版本 **0.2.6**，安装并启用 **Pi Agent Mobile**。已安装旧版的用户，也请在 BRAT 中选择此版本更新。
-4. 电脑进入“设置 → Pi Agent → 连接 → 手机连接”，启用连接、选择手机能访问的电脑局域网/VPN 地址，生成一次性配对码。
-5. 手机打开“Pi Agent Mobile → 电脑连接”，粘贴配对码连接。配对码是 `pi-agent:…` 开头的完整文本，可用扫码工具读取电脑二维码后复制。
+3. 选择指定版本 **0.2.6-beta.1**，安装并启用 **Obot Mobile**。
+4. 电脑进入“设置 → Obot → 连接 → 手机连接”，启用连接，选择“生成远程配对码”。
+5. 手机打开“Obot Mobile → 电脑连接”，粘贴配对码连接。配对码是 `pi-agent:…` 开头的完整文本；可在手机使用流量测试。
 
 只需安装 Release 中的 `main.js`、`manifest.json`、`styles.css`，由 BRAT 自动处理。不需要下载源码、Node、Pi SDK 或配置账号。默认头像已内嵌，独立 ID `pi-agent-mobile` 不覆盖电脑插件 `pi-agent`。
 

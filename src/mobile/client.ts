@@ -9,6 +9,7 @@ import {
   type Envelope,
   type RemoteCredential,
 } from "../shared/mobile-wire.ts";
+import { relayExchange } from "../shared/relay-wire.ts";
 export type RemoteTransport = (
   url: string,
   envelope: Envelope,
@@ -45,6 +46,7 @@ export class MobileClient {
     endpoint: string,
     method: string,
     params: any,
+    relay?: RemoteCredential["relay"],
   ) {
     const request = await seal(
       secret,
@@ -54,7 +56,7 @@ export class MobileClient {
     );
     let timer: ReturnType<typeof setTimeout> | undefined;
     const response = await Promise.race([
-      this.transport(endpoint + REMOTE_PATH, request),
+      relay ? relayExchange(relay, request) : this.transport(endpoint + REMOTE_PATH, request),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
           () => reject(Error("电脑连接超时，请检查同一网络、VPN 和防火墙")),
@@ -90,6 +92,7 @@ export class MobileClient {
       endpoint || code.endpoint,
       "pair",
       { clientId: remoteId(), secret, name },
+      code.relay,
     );
     if (result.hostId !== code.hostId) throw Error("配对电脑身份不匹配");
     return {
@@ -98,6 +101,7 @@ export class MobileClient {
       secret,
       hostId: result.hostId,
       vaultName: result.vaultName,
+      relay: code.relay,
     };
   }
   async connect(credential: RemoteCredential) {
@@ -134,6 +138,7 @@ export class MobileClient {
       credential.endpoint,
       method,
       params,
+      credential.relay,
     );
   }
   mutation<T = any>(

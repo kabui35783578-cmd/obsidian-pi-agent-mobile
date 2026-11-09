@@ -5,6 +5,7 @@ export interface RemoteCredential {
   secret: string;
   hostId: string;
   vaultName: string;
+  relay?: { route: string; key: string };
 }
 export interface PairCode {
   v: 1;
@@ -14,6 +15,7 @@ export interface PairCode {
   hostId: string;
   vaultName: string;
   expiresAt: number;
+  relay?: { route: string; key: string };
 }
 export interface Envelope {
   v: 1;
@@ -134,6 +136,10 @@ export function remoteEndpoint(value: string) {
     throw Error("请填写电脑连接的 http(s) 地址，不含路径、账号或参数");
   return url.origin;
 }
+export function validateRelay(relay: PairCode["relay"], endpoint: string) {
+  if (relay && (endpoint !== "https://relay.paseo.sh" || !/^obot-[a-f0-9-]{36}$/.test(relay.route) || typeof relay.key !== "string" || !/^[A-Za-z0-9+/_=-]{42,48}$/.test(relay.key))) throw Error("远程连接资料无效");
+  return relay;
+}
 export function encodePairCode(value: PairCode) {
   return "pi-agent:" + bytes64(new TextEncoder().encode(JSON.stringify(value)));
 }
@@ -142,11 +148,12 @@ export function decodePairCode(input: string): PairCode {
   if (value.startsWith("obsidian://"))
     value = new URL(value).searchParams.get("code") ?? "";
   if (!value.startsWith("pi-agent:"))
-    throw Error("请粘贴电脑生成的 Pi Agent 配对码");
+    throw Error("请粘贴电脑生成的 Obot 配对码");
   const code = JSON.parse(
     new TextDecoder().decode(from64(value.slice(9))),
   ) as PairCode;
   code.endpoint = remoteEndpoint(code.endpoint);
+  validateRelay(code.relay, code.endpoint);
   if (
     code.v !== 1 ||
     !/^[a-f0-9-]{36}$/.test(code.pairId) ||
