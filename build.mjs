@@ -2,6 +2,7 @@ import { build } from "esbuild";
 import * as fs from "node:fs/promises";
 const meta = await build({
   entryPoints: ["src/mobile/main.ts"],
+  banner: { js: "/*\n" + (await fs.readFile("licenses/relay-notices.txt", "utf8")).replaceAll("*/", "* /") + "\n*/" },
   bundle: true,
   outfile: "main.js",
   platform: "browser",

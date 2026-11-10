@@ -15,6 +15,7 @@ import {
   decodePairCode,
   from64,
   remoteEndpoint,
+  validateRelay,
   type RemoteCredential,
 } from "../shared/mobile-wire.ts";
 
@@ -61,7 +62,7 @@ export default class MobilePlugin extends Plugin {
     this.registerView(MOBILE_VIEW, (leaf) => new MobileChatView(leaf, this));
     this.addRibbonIcon(
       "messages-square",
-      "Pi Agent · 电脑助手",
+      "Obot · 电脑助手",
       () => void this.openChat(),
     );
     this.addCommand({
@@ -119,6 +120,7 @@ export default class MobilePlugin extends Plugin {
     if (raw) {
       const value = JSON.parse(raw) as RemoteCredential;
       value.endpoint = remoteEndpoint(value.endpoint);
+      validateRelay(value.relay, value.endpoint);
       if (
         from64(value.secret).length !== 32 ||
         !/^[a-f0-9-]{36}$/.test(value.deviceId) ||
@@ -201,7 +203,7 @@ export class PairPhoneModal extends Modal {
     this.modalEl.addClass("pi-phone-modal");
     this.titleEl.setText("连接我的电脑");
     this.contentEl.createEl("p", {
-      text: "在电脑 Pi Agent 设置中打开「连接 → 手机连接」，生成配对码，再粘贴到下方。两台设备需连接同一 Wi-Fi，或都打开 Tailscale。",
+      text: "在电脑 Obot 设置中打开「连接 → 手机连接」，生成远程配对码，再粘贴到下方。远程配对支持手机流量，电脑需要保持运行。",
     });
     let code = this.initial,
       name = "我的手机";
@@ -326,7 +328,7 @@ export class PhoneSettings extends PluginSettingTab {
     const help = el.createEl("details", { cls: "pi-phone-setting-details" });
     help.createEl("summary", { text: "连接不上？" });
     help.createEl("p", {
-      text: "确认电脑未休眠、Obsidian 已打开；手机和电脑连接同一 Wi-Fi，或都打开 Tailscale。使用 Tailscale 时，电脑配对地址选择 100. 开头的地址。",
+      text: "确认电脑未休眠、Obsidian 已打开。远程连接请检查两端网络；局域网连接请确认设备处于同一网络。",
     });
     const details = el.createEl("details", { cls: "pi-phone-setting-details" });
     details.createEl("summary", { text: "连接详情与移除" });

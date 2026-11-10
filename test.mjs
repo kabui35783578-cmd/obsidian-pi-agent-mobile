@@ -9,7 +9,7 @@ test("BRAT three-file entry loads with only the Obsidian API", () => {
   const calls = [];
   const api = { Plugin: class {}, Component: class {}, ItemView: class {}, Modal: class {}, PluginSettingTab: class {} };
   runInNewContext(bundle, {
-    module, exports: module.exports, crypto: webcrypto,
+    module, exports: module.exports, crypto: webcrypto, TextEncoder, TextDecoder,
     require(name) { calls.push(name); assert.equal(name, "obsidian"); return api; },
   });
   const plugin = new module.exports.default();
@@ -30,4 +30,13 @@ test("mobile manifest and release metadata agree", async () => {
   assert.equal(manifest.isDesktopOnly, false);
   assert.equal(manifest.version, pkg.version);
   assert.equal(versions[manifest.version], manifest.minAppVersion);
+});
+
+// A remote pairing must retain relay information; otherwise the client sends HTTP to the relay.
+test("remote pairing preserves and validates its relay details", async () => {
+  const { encodePairCode, decodePairCode, remoteId, remoteSecret } = await import("./src/shared/mobile-wire.ts");
+  const code = { v: 1, endpoint: "https://relay.example", pairId: remoteId(), hostId: remoteId(), secret: remoteSecret(), expiresAt: Date.now() + 60000, relay: { route: "obot-" + remoteId(), key: "A".repeat(43) + "=" } };
+  assert.deepEqual(decodePairCode(encodePairCode(code)).relay, code.relay);
+  assert.throws(() => decodePairCode(encodePairCode({ ...code, endpoint: "http://relay.example" })), /远程连接资料无效/);
+  assert.throws(() => decodePairCode(encodePairCode({ ...code, relay: { ...code.relay, route: "invalid" } })), /远程连接资料无效/);
 });
