@@ -31,6 +31,18 @@ import type {
   DelegationRecord,
   ToolEvent,
 } from "../shared/types.ts";
+import {
+  connectionCopy,
+  describePreview,
+  fileChipLabel,
+  greeting,
+  isSameDay,
+  presentMessage,
+  shortStatus,
+  type Artifact,
+  type ExpenseArtifact,
+  type FileArtifact,
+} from "./artifacts.ts";
 
 export const MOBILE_VIEW = "pi-agent-mobile-chat";
 // BRAT installs three release files, so phone avatars cannot rely on an assets folder.
@@ -82,6 +94,9 @@ export class MobileChatView extends ItemView {
   private home!: HTMLElement;
   private homeList!: HTMLElement;
   private homeSearch!: HTMLInputElement;
+  private homeDock!: HTMLElement;
+  private homeInput!: HTMLTextAreaElement;
+  private homeSend!: HTMLButtonElement;
   private homeMode = true;
   private summaries: ConversationSummary[] = [];
   private homeRevision = 0;
@@ -127,6 +142,29 @@ export class MobileChatView extends ItemView {
     });
     this.homeSearch.addEventListener("input", () => this.renderHome());
     this.homeList = this.home.createDiv({ cls: "pi-phone-home-list" });
+    this.homeDock = this.home.createDiv({ cls: "pi-phone-home-dock" });
+    const homeComposer = this.homeDock.createDiv({
+      cls: "pi-chat-composer pi-home-composer",
+    });
+    const homeLine = homeComposer.createDiv({ cls: "pi-composer-line" });
+    this.homeInput = homeLine.createEl("textarea", {
+      attr: {
+        rows: "1",
+        placeholder: "给助手发送消息",
+        "aria-label": "给常用助手发送消息",
+      },
+    });
+    this.homeInput.addEventListener("input", () => {
+      this.resizeHomeInput();
+      this.controls();
+    });
+    this.homeSend = iconButton(
+      homeLine,
+      "arrow-up",
+      "发送给常用助手",
+      () => void this.sendFromHome(),
+      "pi-send-button",
+    );
     this.timeline = el.createDiv({
       cls: "pi-chat-messages pi-phone-messages",
       attr: { "aria-label": "电脑助手聊天" },
@@ -282,15 +320,19 @@ export class MobileChatView extends ItemView {
       attr: { "aria-label": (this.agent?.name ?? "助手") + "，资料与聊天操作" },
     });
     if (this.agent) renderAvatar(identity, this.app, this.agent);
-    identity.createSpan({ text: this.agent?.name ?? "Pi Agent" });
+    const copy = identity.createSpan({ cls: "pi-phone-identity-copy" });
+    copy.createEl("strong", { text: this.agent?.name ?? "Pi Agent" });
+    const link = copy.createEl("em", { cls: "pi-phone-identity-status" });
+    link.createSpan({ cls: "pi-status-dot" });
+    link.createSpan({ cls: "pi-phone-link-text", text: "电脑状态" });
     identity.addEventListener("click", (event) => this.chatMenu(event));
     this.header.createDiv({ cls: "pi-phone-header-space" });
     iconButton(
       this.header,
-      "monitor",
-      "电脑连接与状态",
-      () => this.connectionInfo(),
-      "pi-phone-round pi-phone-host",
+      "ellipsis",
+      "聊天操作",
+      (event) => this.chatMenu(event),
+      "pi-phone-round",
     );
   }
   private controls() {
@@ -301,9 +343,42 @@ export class MobileChatView extends ItemView {
     this.statusEl.hidden =
       !this.error &&
       (client.connected || (this.homeMode && !client.credential));
-    const host = this.header.querySelector<HTMLElement>(".pi-phone-host");
-    host?.toggleClass("is-connected", client.connected);
-    host?.setAttribute("aria-label", "电脑连接：" + client.status);
+    const link = connectionCopy(
+      {
+        connected: client.connected,
+        status: client.status,
+        endpoint: client.credential?.endpoint,
+        hasCredential: Boolean(client.credential),
+      },
+      "chat",
+    );
+    const identityStatus = this.header.querySelector<HTMLElement>(
+      ".pi-phone-identity-status",
+    );
+    identityStatus?.classList.toggle("is-on", link.online);
+    const identityText = identityStatus?.querySelector(".pi-phone-link-text");
+    if (identityText) identityText.textContent = link.text;
+    identityStatus
+      ?.querySelector(".pi-status-dot")
+      ?.classList.toggle("is-on", link.online);
+    const homeLink = this.home?.querySelector<HTMLElement>(".pi-home-link");
+    if (homeLink) {
+      const home = connectionCopy(
+        {
+          connected: client.connected,
+          status: client.status,
+          endpoint: client.credential?.endpoint,
+          hasCredential: Boolean(client.credential),
+        },
+        "home",
+      );
+      homeLink.classList.toggle("is-on", home.online);
+      const homeText = homeLink.querySelector(".pi-phone-link-text");
+      if (homeText) homeText.textContent = home.text;
+      homeLink
+        .querySelector(".pi-status-dot")
+        ?.classList.toggle("is-on", home.online);
+    }
     this.statusEl.toggleClass(
       "is-error",
       Boolean(this.error) || !client.connected,
@@ -326,7 +401,24 @@ export class MobileChatView extends ItemView {
     this.input.disabled = this.sending;
     this.input.placeholder = this.conversation?.archive
       ? "已归档，点助手名开始新聊天"
-      : "问问" + (this.agent?.name ?? "电脑助手") + "…";
+      : "向" + (this.agent?.name ?? "助手") + "发送消息";
+    if (this.homeDock)
+      this.homeDock.hidden = !this.plugin.client.description || !this.homeMode;
+    if (this.homeInput && this.homeSend) {
+      const agent = this.composerAgent();
+      const homePlaceholder = agent
+        ? "给" + agent.name + "发送消息"
+        : "连接电脑后即可发送";
+      if (this.homeInput.placeholder !== homePlaceholder)
+        this.homeInput.placeholder = homePlaceholder;
+      this.homeInput.disabled = !client.connected || this.sending;
+      this.homeSend.disabled =
+        !client.connected || this.sending || !agent || !this.homeInput.value.trim();
+      this.homeSend.setAttribute(
+        "aria-label",
+        agent ? "发送给" + agent.name : "发送",
+      );
+    }
     if (this.shownAttachment === (this.attachment?.path ?? "")) return;
     this.shownAttachment = this.attachment?.path ?? "";
     this.attachmentEl.empty();
@@ -722,18 +814,9 @@ export class MobileChatView extends ItemView {
         new Date(message.at).getTime() - new Date(previous.at).getTime() >
           15 * 60_000
       ) {
-        const date = new Date(message.at);
         this.timeline.createDiv({
           cls: "pi-phone-date",
-          text:
-            (date.toDateString() === new Date().toDateString()
-              ? "今天"
-              : date.toLocaleDateString("zh-CN", {
-                  month: "numeric",
-                  day: "numeric",
-                })) +
-            " " +
-            date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          text: this.messageStamp(new Date(message.at)),
         });
       }
       const row = this.timeline.createDiv({
@@ -749,29 +832,26 @@ export class MobileChatView extends ItemView {
         });
       // User text is a literal instruction; assistant Markdown links open the
       // remote read-only note viewer rather than a same-named local note.
+      const events = eventGroups.get(offset + index);
       if (message.role === "user")
         row.createDiv({
           cls: "pi-message-bubble markdown-rendered",
           text: message.text,
         });
-      else {
-        const key = String(index + ((c as any).messageOffset ?? 0));
-        retained.add(key);
-        const body = this.markdownCache.render(
-          key,
-          safeMarkdown(message.text),
-          "",
+      else
+        this.renderRichText(
           row,
-          "pi-message-bubble markdown-rendered",
+          String(index + ((c as any).messageOffset ?? 0)),
+          message.text,
+          events ?? [],
+          retained,
+          message.at,
         );
-        void body.ready;
-      }
-      const events = eventGroups.get(offset + index);
       if (events?.length)
         this.renderActivity(events, offset + index, opened, activeIndex);
       for (const record of c.delegations ?? [])
         if (record.messageIndex === index + ((c as any).messageOffset ?? 0))
-          this.delegation(record);
+          this.delegation(record, retained);
     }
     if (!c.messages.length)
       this.timeline.createDiv({
@@ -888,7 +968,7 @@ export class MobileChatView extends ItemView {
       this.messagesComponent!,
     ).catch(() => el.setText(text));
   }
-  private delegation(record: DelegationRecord) {
+  private delegation(record: DelegationRecord, retained: Set<string>) {
     const el = this.timeline.createDiv({ cls: "pi-delegation" });
     el.dataset.conversationId = record.conversationId;
     const agents = this.plugin.client.description.agents as AgentRecord[];
@@ -921,16 +1001,154 @@ export class MobileChatView extends ItemView {
           ? " · " + toolLabel(record.progress)
           : ""),
     });
-    const reply = el.createDiv({
-      cls: "pi-delegation-reply markdown-rendered",
-    });
+    const reply = el.createDiv({ cls: "pi-delegation-reply" });
     if (record.status === "running") {
       const node = document.createTextNode(
         this.streams.get(record.conversationId)?.text ?? "",
       );
       reply.appendChild(node);
       this.streamNodes.set(record.conversationId, node);
-    } else this.markdown(record.result || record.error || "", reply);
+    } else if (
+      record.status === "completed" &&
+      record.result &&
+      presentMessage(record.result).some((segment) => segment.type === "artifact")
+    )
+      this.renderRichText(
+        reply,
+        "deleg:" + record.conversationId,
+        record.result,
+        [],
+        retained,
+      );
+    else {
+      reply.addClass("markdown-rendered");
+      this.markdown(record.result || record.error || "", reply);
+    }
+  }
+  private renderRichText(
+    parent: HTMLElement,
+    key: string,
+    text: string,
+    events: ToolEvent[],
+    retained: Set<string>,
+    at?: string,
+  ) {
+    const segments = presentMessage(
+      text,
+      events.map((event) => ({
+        name: event.name,
+        status: event.status,
+        detail: event.detail,
+      })),
+    );
+    if (!segments.some((segment) => segment.type === "artifact")) {
+      retained.add(key);
+      void this.markdownCache.render(
+        key,
+        safeMarkdown(text),
+        "",
+        parent,
+        "pi-message-bubble markdown-rendered",
+      ).ready;
+      return;
+    }
+    let part = 0;
+    for (const segment of segments) {
+      if (segment.type === "text") {
+        const partKey = key + ":" + part++;
+        retained.add(partKey);
+        void this.markdownCache.render(
+          partKey,
+          safeMarkdown(segment.text),
+          "",
+          parent,
+          "pi-message-bubble markdown-rendered",
+        ).ready;
+      } else this.renderArtifact(parent, segment.artifact, at);
+    }
+  }
+  private renderArtifact(parent: HTMLElement, artifact: Artifact, at?: string) {
+    const card = parent.createDiv({
+      cls: "pi-artifact pi-artifact-" + artifact.kind,
+    });
+    if (artifact.kind === "expense") {
+      const head = card.createDiv({ cls: "pi-artifact-hd" });
+      head.createSpan({ cls: "pi-artifact-kicker", text: "记账" });
+      head.createSpan({ cls: "pi-artifact-badge", text: artifact.badge });
+      const body = card.createDiv({ cls: "pi-artifact-bd" });
+      body.createDiv({ cls: "pi-artifact-title", text: artifact.category });
+      const when = this.expenseWhen(artifact, at);
+      if (when) body.createDiv({ cls: "pi-artifact-sub", text: when });
+      this.renderExpenseMini(body, artifact);
+      if (artifact.path && artifact.action)
+        this.artifactAction(card, artifact.action, artifact.path);
+      return;
+    }
+    const file = card.createDiv({ cls: "pi-artifact-file" });
+    const icon = file.createDiv({ cls: "pi-artifact-file-icon", attr: { "aria-hidden": "true" } });
+    setIcon(icon, "file-text");
+    const meta = file.createDiv({ cls: "pi-artifact-file-meta" });
+    meta.createEl("strong", { text: artifact.name });
+    meta.createSpan({ text: artifact.subtitle });
+    this.artifactAction(card, artifact.action, artifact.path);
+  }
+  private artifactAction(card: HTMLElement, label: string, path: string) {
+    card
+      .createEl("button", {
+        cls: "pi-artifact-action",
+        text: label,
+        attr: { type: "button" },
+      })
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.readNote(path);
+      });
+  }
+  private renderExpenseMini(parent: HTMLElement, expense: ExpenseArtifact) {
+    const box = parent.createDiv({ cls: "pi-mini-ledger" });
+    const row = box.createDiv({ cls: "pi-ledger-row" });
+    row.createSpan({ text: expense.item || "金额" });
+    row.createSpan({ cls: "pi-ledger-amt", text: expense.amount });
+    if (expense.total && expense.totalLabel) {
+      const total = box.createDiv({ cls: "pi-ledger-row is-total" });
+      total.createSpan({ text: expense.totalLabel });
+      total.createSpan({ cls: "pi-ledger-amt", text: expense.total });
+    }
+  }
+  private renderFileChip(parent: HTMLElement, file: FileArtifact) {
+    const chip = parent.createDiv({ cls: "pi-file-chip" });
+    const icon = chip.createSpan({ cls: "pi-file-chip-icon", attr: { "aria-hidden": "true" } });
+    setIcon(icon, "file");
+    chip.createSpan({ text: fileChipLabel(file.path) });
+  }
+  private expenseWhen(expense: ExpenseArtifact, at?: string) {
+    const date = at ? new Date(at) : undefined;
+    const day = date && !Number.isNaN(date.getTime()) ? this.dayLabel(date) : "";
+    if (expense.time) return (day ? day + " " : "") + expense.time;
+    if (!date || Number.isNaN(date.getTime())) return "";
+    return (
+      day +
+      " " +
+      date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    ).trim();
+  }
+  private dayLabel(date: Date) {
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) return "今天";
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return "昨天";
+    return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  }
+  private messageStamp(date: Date) {
+    const day = this.dayLabel(date);
+    if (day === "昨天") return day;
+    return (
+      day +
+      " " +
+      date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    );
   }
   private flushStreams() {
     const follow =
@@ -984,7 +1202,9 @@ export class MobileChatView extends ItemView {
           );
           return rows.map((c) => ({
             label: c.title,
-            description: (c.archive ? "已归档 · " : "") + c.preview,
+            description:
+              (c.archive ? "已归档 · " : "") +
+              describePreview(c.preview).preview,
             value: c.id,
             current: c.id === id,
           }));
@@ -1206,77 +1426,57 @@ export class MobileChatView extends ItemView {
         ) ||
         a.name.localeCompare(b.name, "zh-CN"),
     );
-    const featured = query ? [] : this.pinnedAgents(agents);
-    if (featured.length) {
-      const favorites = this.homeList.createDiv({
-        cls: "pi-phone-favorites",
-        attr: { "aria-label": "固定助手，长按调整" },
-      });
-      for (const agent of featured) {
-        const button = favorites.createEl("button", {
-          cls: "pi-phone-favorite",
-          attr: { "aria-label": "与" + agent.name + "聊天，长按调整固定" },
-        });
-        renderAvatar(button, this.app, agent);
-        button.createSpan({ text: agent.name });
-        this.pinGesture(button, agent, featured);
-        button.addEventListener("click", () => void this.selectAgent(agent));
-      }
+    const pinned = this.pinnedAgents(agents);
+    if (!query) {
+      const hello = this.homeList.createDiv({ cls: "pi-phone-hello" });
+      hello.createEl("h2", { text: greeting() });
+      const sub = hello.createDiv({ cls: "pi-home-link" });
+      sub.createSpan({ cls: "pi-status-dot" });
+      sub.createSpan({ cls: "pi-phone-link-text", text: "电脑状态" });
+      const today = agents
+        .map((agent) => {
+          const summary = latest(agent.id);
+          if (!summary || !isSameDay(summary.updatedAt)) return;
+          const brief = describePreview(
+            summary.preview,
+            summary.status === "running",
+          );
+          if (!brief.structured || summary.status === "running") return;
+          return { agent, summary, brief };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .sort((a, b) =>
+          b.summary.updatedAt.localeCompare(a.summary.updatedAt),
+        )
+        .slice(0, 3);
+      if (today.length) this.renderToday(today);
+      if (pinned.length) this.renderPins(pinned, latest);
     }
     const rows = this.homeList.createDiv({
       cls: "pi-phone-recent",
       attr: { "aria-label": "助手聊天" },
     });
     const matches = agents.filter(
-      (a) =>
+      (agent) =>
         !query ||
-        [a.name, a.description, a.scope, latest(a.id)?.preview ?? ""]
+        [agent.name, agent.description, agent.scope, latest(agent.id)?.preview ?? ""]
           .join(" ")
           .toLocaleLowerCase()
           .includes(query),
     );
     const recent = matches
-      .filter((a) => latest(a.id))
+      .filter((agent) => latest(agent.id))
       .sort((a, b) =>
         latest(b.id)!.updatedAt.localeCompare(latest(a.id)!.updatedAt),
       );
-    const others = matches.filter((a) => !latest(a.id));
+    const others = matches.filter((agent) => !latest(agent.id));
     for (const [label, group] of [
-      ["最近聊天", recent],
+      ["最近", recent],
       ["其他助手", others],
     ] as const) {
       if (!group.length) continue;
-      if (!query) rows.createDiv({ cls: "pi-phone-list-label", text: label });
-      for (const agent of group) {
-        const summary = latest(agent.id);
-        const button = rows.createEl("button", {
-          cls: "pi-phone-contact",
-          attr: { "aria-label": "与" + agent.name + "聊天" },
-        });
-        button.dataset.agentId = agent.id;
-        renderAvatar(button, this.app, agent);
-        const body = button.createDiv({ cls: "pi-phone-contact-body" });
-        const title = body.createDiv({ cls: "pi-phone-contact-title" });
-        title.createEl("strong", { text: agent.name });
-        if (summary)
-          title.createEl("time", {
-            text: this.relativeTime(summary.updatedAt),
-            attr: { datetime: summary.updatedAt },
-          });
-        body.createDiv({
-          cls: "pi-phone-contact-preview",
-          text:
-            summary?.status === "running"
-              ? "正在处理…"
-              : summary?.preview ||
-                agent.description ||
-                (agent.scope
-                  ? "负责 " + agent.scope
-                  : "帮你处理笔记与日常任务"),
-        });
-        this.pinGesture(button, agent, this.pinnedAgents(agents));
-        button.addEventListener("click", () => void this.selectAgent(agent));
-      }
+      if (!query) rows.createDiv({ cls: "pi-phone-block-title", text: label });
+      for (const agent of group) this.renderContact(rows, agent, latest(agent.id), pinned);
     }
     if (query && !matches.length)
       rows.createDiv({
@@ -1288,6 +1488,165 @@ export class MobileChatView extends ItemView {
         cls: "pi-phone-empty",
         text: "还没有助手，请先在电脑打开 Pi Agent。",
       });
+    this.controls();
+  }
+  private renderToday(
+    items: {
+      agent: AgentRecord;
+      summary: ConversationSummary;
+      brief: ReturnType<typeof describePreview>;
+    }[],
+  ) {
+    const block = this.homeList.createDiv({ cls: "pi-phone-block" });
+    block.createDiv({ cls: "pi-phone-block-title", text: "今日" });
+    const card = block.createDiv({ cls: "pi-today-card" });
+    for (const item of items) {
+      const button = card.createEl("button", {
+        cls: "pi-today-item",
+        attr: {
+          type: "button",
+          "aria-label": item.agent.name + "，" + item.brief.title,
+        },
+      });
+      renderAvatar(button, this.app, item.agent);
+      const copy = button.createDiv({ cls: "pi-today-copy" });
+      const kicker = copy.createDiv({ cls: "pi-today-kicker" });
+      kicker.createEl("strong", { text: item.agent.name });
+      kicker.createEl("time", {
+        text: this.relativeTime(item.summary.updatedAt),
+        attr: { datetime: item.summary.updatedAt },
+      });
+      copy.createDiv({ cls: "pi-today-title", text: item.brief.title });
+      if (item.brief.expense) this.renderExpenseMini(copy, item.brief.expense);
+      else if (item.brief.file) this.renderFileChip(copy, item.brief.file);
+      button.addEventListener("click", () => void this.selectAgent(item.agent));
+    }
+  }
+  private renderPins(
+    featured: AgentRecord[],
+    latest: (id: string) => ConversationSummary | undefined,
+  ) {
+    const block = this.homeList.createDiv({ cls: "pi-phone-block" });
+    block.createDiv({ cls: "pi-phone-block-title", text: "常用助手" });
+    const grid = block.createDiv({
+      cls: "pi-pin-grid",
+      attr: { "aria-label": "固定助手，长按调整" },
+    });
+    for (const agent of featured) {
+      const summary = latest(agent.id);
+      const brief = summary
+        ? describePreview(summary.preview, summary.status === "running")
+        : undefined;
+      const status =
+        brief?.statusLine ||
+        shortStatus(
+          agent.description ||
+            (agent.scope ? "负责 " + agent.scope : "随时聊聊"),
+        );
+      const button = grid.createEl("button", {
+        cls: "pi-pin-card",
+        attr: {
+          type: "button",
+          "aria-label": "与" + agent.name + "聊天，长按调整固定。" + status,
+        },
+      });
+      renderAvatar(button, this.app, agent);
+      button.createSpan({ cls: "pi-pin-name", text: agent.name });
+      button.createSpan({ cls: "pi-pin-status", text: status });
+      this.pinGesture(button, agent, featured);
+      button.addEventListener("click", () => void this.selectAgent(agent));
+    }
+  }
+  private renderContact(
+    parent: HTMLElement,
+    agent: AgentRecord,
+    summary: ConversationSummary | undefined,
+    pinned: AgentRecord[],
+  ) {
+    const brief = summary
+      ? describePreview(summary.preview, summary.status === "running")
+      : undefined;
+    const preview = summary
+      ? summary.status === "running"
+        ? "正在处理…"
+        : brief?.preview || summary.preview
+      : agent.description ||
+        (agent.scope ? "负责 " + agent.scope : "帮你处理笔记与日常任务");
+    const button = parent.createEl("button", {
+      cls: "pi-phone-contact",
+      attr: { type: "button", "aria-label": "与" + agent.name + "聊天" },
+    });
+    button.dataset.agentId = agent.id;
+    renderAvatar(button, this.app, agent);
+    const body = button.createDiv({ cls: "pi-phone-contact-body" });
+    const title = body.createDiv({ cls: "pi-phone-contact-title" });
+    title.createEl("strong", { text: agent.name });
+    if (summary)
+      title.createEl("time", {
+        text: this.relativeTime(summary.updatedAt),
+        attr: { datetime: summary.updatedAt },
+      });
+    body.createDiv({ cls: "pi-phone-contact-preview", text: preview });
+    if (brief && summary?.status !== "running" && brief.chips.length) {
+      const chips = body.createDiv({ cls: "pi-chip-row" });
+      for (const chip of brief.chips) {
+        chips.createSpan({
+          cls: "pi-chip" + (chip.tone ? " is-" + chip.tone : ""),
+          text: chip.text,
+        });
+      }
+    }
+    this.pinGesture(button, agent, pinned);
+    button.addEventListener("click", () => void this.selectAgent(agent));
+  }
+  private composerAgent() {
+    const agents = (this.plugin.client.description?.agents ?? []) as AgentRecord[];
+    const last = this.app.loadLocalStorage(this.plugin.localKey("selected-agent"));
+    return (
+      agents.find((agent) => agent.id === last) ||
+      this.pinnedAgents(agents)[0] ||
+      agents[0]
+    );
+  }
+  private resizeHomeInput() {
+    if (!this.homeInput) return;
+    this.homeInput.style.height = "auto";
+    this.homeInput.style.height =
+      Math.min(128, Math.max(36, this.homeInput.scrollHeight)) + "px";
+  }
+  private async sendFromHome() {
+    const text = this.homeInput?.value.trim() ?? "";
+    const agent = this.composerAgent();
+    if (!text || !agent || this.sending || !this.plugin.client.connected) return;
+    this.homeInput.value = "";
+    this.resizeHomeInput();
+    this.controls();
+    await this.selectAgent(agent);
+    if (!this.conversation || this.homeMode) {
+      if (this.homeMode && this.homeInput) this.homeInput.value = text;
+      else if (this.input) {
+        this.input.value = text;
+        this.resizeInput();
+        this.saveDraft();
+        this.controls();
+      }
+      return;
+    }
+    if (
+      this.conversation.archive ||
+      this.conversation.status === "running" ||
+      this.outbox()
+    ) {
+      this.input.value = text;
+      this.resizeInput();
+      this.saveDraft();
+      this.controls();
+      return;
+    }
+    this.input.value = text;
+    this.resizeInput();
+    this.saveDraft();
+    await this.sendOrStop();
   }
   private pinnedAgents(agents: AgentRecord[]) {
     const stored = this.app.loadLocalStorage(
@@ -1721,7 +2080,10 @@ class PhoneHistory extends Modal {
             " 条 · " +
             new Date(item.updatedAt).toLocaleString(),
         });
-        open.createSpan({ cls: "pi-history-preview", text: item.preview });
+        open.createSpan({
+          cls: "pi-history-preview",
+          text: describePreview(item.preview).preview || item.preview,
+        });
         open.addEventListener("click", () => {
           this.close();
           void this.view.openConversation(item.id);

@@ -2436,7 +2436,8 @@ body.is-mobile.pi-phone-active .pi-phone-view {
   margin: 0 !important;
   height: 100%;
 }
-body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
+body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock,
+body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
   padding-bottom: max(
     10px,
     calc(var(--pi-safe-bottom) - var(--keyboard-height, 0px))
@@ -2446,6 +2447,11 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   display: none;
 }
 .pi-phone-view {
+  --pi-home: #fafafa;
+  --pi-line: #e8e8e8;
+  --pi-surface: #f4f4f5;
+  --pi-ok: #1f7a4e;
+  --pi-ok-bg: #e6f5ec;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -2459,6 +2465,16 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   container-type: inline-size;
+}
+.theme-dark .pi-phone-view {
+  --pi-home: #101010;
+  --pi-line: var(--background-modifier-border);
+  --pi-surface: var(--background-secondary);
+  --pi-ok: #8fd4ae;
+  --pi-ok-bg: rgba(47, 158, 104, 0.18);
+}
+.pi-phone-view.is-home {
+  background: var(--pi-home);
 }
 .pi-phone-view [hidden] {
   display: none !important;
@@ -2483,6 +2499,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-view.is-home .pi-phone-header {
   min-height: 52px;
   padding-top: 4px;
+  background: transparent;
 }
 .pi-phone-header-space {
   flex: 1;
@@ -2500,7 +2517,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   padding: 11px;
   border: 0;
   border-radius: 50%;
-  background: var(--pi-canvas);
+  background: var(--pi-surface);
   color: var(--pi-ink);
   box-shadow: none;
   transition:
@@ -2509,8 +2526,10 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-view button.pi-phone-round:active,
 .pi-phone-view button.pi-phone-identity:active,
-.pi-phone-view .pi-phone-favorite:active {
-  transform: scale(0.95);
+.pi-phone-view .pi-phone-favorite:active,
+.pi-phone-view .pi-pin-card:active,
+.pi-phone-view .pi-today-item:active {
+  transform: scale(0.98);
   background: var(--pi-bubble);
 }
 .pi-phone-view .pi-phone-round svg {
@@ -2519,28 +2538,74 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   stroke-width: 1.8;
 }
 .pi-phone-view button.pi-phone-identity {
-  gap: 6px;
+  gap: 8px;
   flex: 0 1 auto;
-  padding: 8px 8px 8px 4px;
+  justify-content: flex-start;
+  padding: 4px 8px 4px 2px;
   width: auto;
   height: 44px;
   min-height: 44px;
   min-width: 0;
-  max-width: calc(100% - 104px);
-  border-radius: 24px;
-  font-size: 14px;
+  max-width: calc(100% - 96px);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 16px;
   font-weight: 600;
   text-align: left;
 }
-.pi-phone-identity > span:last-child {
+.pi-phone-identity-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.pi-phone-identity-copy strong {
+  max-width: 100%;
+  color: var(--pi-ink);
+  font-size: 16px;
+  font-weight: 620;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pi-phone-identity-status,
+.pi-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--pi-secondary);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.3;
+}
+.pi-phone-identity-status {
+  font-size: 11px;
+}
+.pi-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--pi-secondary);
+}
+.pi-home-link .pi-status-dot.is-on,
+.pi-phone-identity-status .pi-status-dot.is-on {
+  background: #2f9e68;
+  box-shadow: 0 0 0 3px rgba(47, 158, 104, 0.16);
+}
+.pi-phone-identity-status .pi-status-dot {
+  width: 6px;
+  height: 6px;
+  flex-basis: 6px;
+  box-shadow: none;
+}
 .pi-phone-view .pi-phone-identity .pi-agent-avatar {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   background: transparent;
   border-radius: 0;
 }
@@ -2575,19 +2640,228 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-home {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+}
+.pi-phone-home-list {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  padding: 0 16px
-    max(
-      20px,
-      var(
-        --pi-safe-bottom,
-        var(--safe-area-inset-bottom, env(safe-area-inset-bottom))
-      )
-    );
+  padding: 0 16px 18px;
   overscroll-behavior: contain;
 }
+.pi-phone-hello {
+  padding: 2px 4px 8px;
+}
+.pi-phone-hello h2 {
+  margin: 0;
+  color: var(--pi-ink);
+  font-size: 24px;
+  font-weight: 630;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+.pi-phone-hello .pi-home-link {
+  margin-top: 4px;
+}
+.pi-phone-block {
+  padding: 0 0 8px;
+}
+.pi-phone-block-title {
+  margin: 2px 4px 8px;
+  color: var(--pi-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.pi-today-card {
+  background: var(--pi-canvas);
+  border: 1px solid var(--pi-line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.pi-phone-view button.pi-pin-card,
+.pi-phone-view button.pi-today-item,
+.pi-phone-view button.pi-phone-contact,
+.pi-phone-view button.pi-artifact-action {
+  font: inherit;
+}
+.pi-phone-view button.pi-today-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--pi-ink);
+  text-align: left;
+}
+.pi-phone-view button.pi-today-item + button.pi-today-item {
+  border-top: 1px solid var(--pi-line);
+}
+.pi-today-item > .pi-agent-avatar {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  margin-top: 2px;
+  background: transparent;
+}
+.pi-today-copy {
+  flex: 1;
+  min-width: 0;
+}
+.pi-today-kicker {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+  color: var(--pi-secondary);
+  font-size: 12px;
+}
+.pi-today-kicker strong {
+  color: var(--pi-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.pi-today-kicker time {
+  flex: 0 0 auto;
+  color: var(--pi-secondary);
+  font-size: 12px;
+}
+.pi-today-title {
+  margin-bottom: 6px;
+  color: var(--pi-ink);
+  font-size: 15px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+.pi-mini-ledger {
+  background: var(--pi-surface);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.pi-ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--pi-ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.pi-ledger-row + .pi-ledger-row {
+  margin-top: 4px;
+}
+.pi-ledger-amt {
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+.pi-ledger-row.is-total {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--pi-line);
+  color: var(--pi-secondary);
+  font-size: 12px;
+}
+.pi-ledger-row.is-total .pi-ledger-amt {
+  color: var(--pi-ink);
+}
+.pi-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--pi-surface);
+  color: var(--pi-ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+.pi-file-chip span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-file-chip-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--pi-secondary);
+}
+.pi-file-chip-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.pi-pin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.pi-phone-view button.pi-pin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 6px 9px;
+  border: 1px solid var(--pi-line);
+  border-radius: 16px;
+  background: var(--pi-canvas);
+  box-shadow: none;
+  color: var(--pi-ink);
+  text-align: center;
+}
+.pi-pin-card .pi-agent-avatar {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 6px;
+  background: transparent;
+}
+.pi-pin-name,
+.pi-pin-status {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-pin-name {
+  color: var(--pi-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pi-pin-status {
+  margin-top: 2px;
+  color: var(--pi-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+.pi-phone-home-dock {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  margin-top: -10px;
+  padding: 6px 16px max(12px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--pi-home) 72%, transparent);
+}
 .pi-phone-home-search {
-  padding: 0 0 12px;
+  flex-shrink: 0;
+  padding: 0 16px 8px;
 }
 .pi-phone-home-search input[type="search"] {
   width: 100%;
@@ -2640,18 +2914,21 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-view .pi-phone-contact {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 12px;
   width: 100%;
-  min-height: 64px;
+  min-height: 0;
   height: auto;
-  padding: 8px 0;
+  padding: 9px 4px;
   text-align: left;
   border: 0;
   box-shadow: none;
   background: transparent;
   color: var(--pi-ink);
   border-radius: 12px;
+}
+.pi-phone-recent .pi-phone-contact + .pi-phone-contact {
+  border-top: 1px solid color-mix(in srgb, var(--pi-line) 65%, transparent);
 }
 .pi-phone-view .pi-phone-contact:active {
   background: var(--pi-bubble);
@@ -2660,6 +2937,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   width: 40px;
   height: 40px;
   flex: 0 0 40px;
+  margin-top: 1px;
   background: transparent;
   border-radius: 0;
 }
@@ -2672,11 +2950,19 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   align-items: baseline;
   gap: 8px;
 }
+.pi-phone-view button.pi-phone-contact,
+.pi-phone-view button.pi-pin-card,
+.pi-phone-view button.pi-today-item,
+.pi-phone-view button.pi-phone-contact strong,
+.pi-phone-view button.pi-pin-card .pi-pin-name,
+.pi-phone-view button.pi-today-item strong {
+  color: var(--pi-ink);
+}
 .pi-phone-contact-title strong {
   flex: 1;
   min-width: 0;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 620;
   color: var(--pi-ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2689,13 +2975,47 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   font-weight: 400;
 }
 .pi-phone-contact-preview {
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 13px;
   line-height: 1.4;
   color: var(--pi-secondary);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pi-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.pi-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: var(--pi-surface);
+  color: var(--pi-ink);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-chip.is-ok {
+  color: var(--pi-ok);
+  background: var(--pi-ok-bg);
+}
+.pi-chip.is-warn {
+  color: #9a5a12;
+  background: #f8eedc;
+}
+.theme-dark .pi-chip.is-warn {
+  color: #e7c08a;
+  background: rgba(196, 132, 42, 0.18);
 }
 .pi-phone-list-label {
   padding: 12px 0 0;
@@ -2726,6 +3046,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-view .pi-message {
   display: flex;
   flex-direction: column;
+  gap: 8px;
   width: fit-content;
   max-width: 88%;
   min-width: 0;
@@ -2735,6 +3056,10 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   background: transparent;
   color: var(--pi-ink);
   border-radius: 0;
+}
+.pi-phone-view .pi-message:has(.pi-artifact) {
+  width: min(92%, 420px);
+  max-width: 92%;
 }
 .pi-phone-view .pi-message-user {
   margin-left: auto;
@@ -2753,18 +3078,125 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 .pi-phone-view .pi-message-bubble {
   width: fit-content;
   max-width: 100%;
-  padding: 10px 13px;
+  padding: 10px 14px;
   border-radius: 18px;
+  border-bottom-left-radius: 6px;
   background: var(--pi-bubble);
   color: var(--pi-ink);
   overflow-wrap: anywhere;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 .pi-phone-view .pi-message-user .pi-message-bubble {
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 6px;
   background: var(--pi-user-bubble);
   color: var(--pi-user-ink);
   white-space: pre-wrap;
+}
+.pi-artifact {
+  width: 100%;
+  background: var(--pi-canvas);
+  border: 1px solid var(--pi-line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.pi-artifact-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+.pi-artifact-kicker {
+  color: var(--pi-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pi-artifact-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pi-ok-bg);
+  color: var(--pi-ok);
+  font-size: 11px;
+  font-weight: 620;
+}
+.pi-artifact-bd {
+  padding: 8px 14px 14px;
+}
+.pi-artifact-title {
+  color: var(--pi-ink);
+  font-size: 16px;
+  font-weight: 630;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.pi-artifact-sub {
+  margin: 2px 0 10px;
+  color: var(--pi-secondary);
+  font-size: 12px;
+}
+.pi-artifact-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.pi-artifact-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 10px;
+  background: var(--pi-surface);
+  color: var(--pi-secondary);
+}
+.pi-artifact-file-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.pi-artifact-file-meta {
+  min-width: 0;
+}
+.pi-artifact-file-meta strong {
+  display: block;
+  color: var(--pi-ink);
+  font-size: 14px;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-artifact-file-meta span {
+  display: block;
+  margin-top: 2px;
+  color: var(--pi-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-phone-view button.pi-artifact-action {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-top: 1px solid var(--pi-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--pi-ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+.pi-phone-view button.pi-artifact-action:active {
+  background: var(--pi-surface);
 }
 .pi-phone-view .pi-message-bubble p {
   margin: 0 0 8px;
@@ -2832,10 +3264,11 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
 }
 .pi-phone-view .pi-chat-composer {
   width: 100%;
-  padding: 3px;
-  border: 1px solid var(--pi-border);
-  border-radius: 26px;
-  box-shadow: none;
+  padding: 4px 4px 4px 6px;
+  border: 1px solid var(--pi-line);
+  border-radius: 24px;
+  background: var(--pi-canvas);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 .pi-phone-view .pi-composer-line {
   display: flex;
@@ -2881,9 +3314,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   color: var(--pi-canvas);
 }
 .pi-phone-view button.pi-send-button:disabled {
-  background: transparent;
-  color: var(--pi-secondary);
-  opacity: 0.55;
+  background: var(--pi-ink);
+  color: var(--pi-canvas);
+  opacity: 0.92;
 }
 .pi-phone-view .pi-attachment-list:empty {
   display: none;
@@ -3122,7 +3555,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
     padding-inline: 10px;
     gap: 5px;
   }
-  .pi-phone-home {
+  .pi-phone-home-list,
+  .pi-phone-home-dock,
+  .pi-phone-home-search {
     padding-inline: 14px;
   }
   .pi-phone-favorites {
@@ -3226,9 +3661,15 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock {
   -webkit-touch-callout: none;
   user-select: none;
 }
-.pi-phone-recent .pi-phone-contact {
+.pi-phone-recent .pi-phone-contact,
+.pi-pin-card,
+.pi-today-item {
   touch-action: pan-y;
   -webkit-touch-callout: none;
+  user-select: none;
+}
+.pi-phone-recent .pi-phone-block-title {
+  padding-top: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
