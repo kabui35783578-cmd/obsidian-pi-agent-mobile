@@ -11,6 +11,7 @@ import {
 } from "obsidian";
 import { MobileClient } from "./client.ts";
 import { MobileChatView, MOBILE_VIEW } from "./view.ts";
+import { installSwipeNavigation } from "./swipe-navigation.ts";
 import {
   decodePairCode,
   from64,
@@ -43,6 +44,10 @@ export default class MobilePlugin extends Plugin {
       (Platform.isMobile || document.body.classList.contains("is-mobile")) &&
       this.app.workspace.activeLeaf?.view.getViewType() === MOBILE_VIEW;
     document.body.classList.toggle("pi-phone-active", active);
+    if (active) {
+      for (const drawer of [this.app.workspace.leftSplit, this.app.workspace.rightSplit])
+        if (!drawer.collapsed) drawer.collapse();
+    }
   }
   async leaveChat() {
     let target: WorkspaceLeaf | undefined;
@@ -60,6 +65,15 @@ export default class MobilePlugin extends Plugin {
   }
   async onload() {
     this.registerView(MOBILE_VIEW, (leaf) => new MobileChatView(leaf, this));
+    this.register(installSwipeNavigation(
+      window,
+      () => (Platform.isMobile || document.body.classList.contains("is-mobile")) &&
+        this.app.workspace.activeLeaf?.view.getViewType() === MOBILE_VIEW,
+      () => {
+        const view = this.app.workspace.activeLeaf?.view;
+        if (view instanceof MobileChatView) view.navigateBack();
+      },
+    ));
     this.addRibbonIcon(
       "messages-square",
       "Obot · 电脑助手",

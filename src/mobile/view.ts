@@ -1407,6 +1407,33 @@ export class MobileChatView extends ItemView {
     this.renderHome();
     await this.refreshHome();
   }
+  navigateBack() {
+    // Overlays are above the chat and must close before navigating the page.
+    const modal = Array.from(document.querySelectorAll<HTMLElement>(".modal-container"))
+      .filter((el) => el.isConnected && !el.hidden).pop();
+    if (modal) {
+      modal.querySelector<HTMLElement>(".modal-close-button")?.click();
+      return;
+    }
+    const menu = document.querySelector<HTMLElement>(".menu");
+    if (menu) {
+      menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      return;
+    }
+    if (this.contentEl.querySelector(".pi-slash-menu:not([hidden])")) {
+      this.slashMenu?.close();
+      return;
+    }
+    if (!this.homeMode) {
+      void this.showHome();
+      return;
+    }
+    if (!this.homeSearch.parentElement?.hidden) {
+      this.homeSearch.value = "";
+      this.homeSearch.parentElement!.hidden = true;
+      this.renderHome();
+    }
+  }
   private async refreshHome() {
     const revision = ++this.homeRevision;
     try {

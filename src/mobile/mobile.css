@@ -2,6 +2,7 @@
 /* Only the active phone workspace takes over chrome. Obsidian owns the
    keyboard viewport; the chat owns safe-area padding while its chrome is hidden. */
 body.is-mobile.pi-phone-active {
+  touch-action: pan-y pinch-zoom;
   --navbar-height: 0px;
   --navbar-bottom-offset: 0px;
   --mobile-toolbar-height: 0px;
@@ -31,6 +32,7 @@ body.is-mobile.pi-phone-active
   overflow: hidden;
 }
 body.is-mobile.pi-phone-active .pi-phone-view {
+  touch-action: pan-y pinch-zoom;
   --pi-safe-top: max(
     0px,
     var(--safe-area-inset-top, 0px),
@@ -55,6 +57,9 @@ body.is-mobile.pi-phone-active .pi-phone-view {
   padding: var(--pi-safe-top) var(--pi-safe-right) 0 var(--pi-safe-left) !important;
   margin: 0 !important;
   height: 100%;
+}
+body.is-mobile.pi-phone-active .modal-container {
+  touch-action: pan-y pinch-zoom;
 }
 body.is-mobile.pi-phone-active .pi-phone-view .pi-composer-dock,
 body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
