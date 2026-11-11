@@ -19,6 +19,7 @@ import { MOBILE_AVATARS } from "./avatar-data.ts";
 import { remoteId } from "../shared/mobile-wire.ts";
 import { latestByAgent, toolSteps } from "../shared/conversation-ui.ts";
 import { MarkdownCache } from "../plugin/markdown-cache.ts";
+import { ConversationCache } from "./conversation-cache.ts";
 import { SlashMenu } from "../plugin/slash-menu.ts";
 import { handleSlashUI } from "../plugin/command-ui.ts";
 import { CommandDraft } from "../plugin/command-draft.ts";
@@ -99,6 +100,11 @@ export class MobileChatView extends ItemView {
   private homeSend!: HTMLButtonElement;
   private homeMode = true;
   private summaries: ConversationSummary[] = [];
+  private summariesLoaded = false;
+  private prefetchRevision = 0;
+  private conversationCache = new ConversationCache((id) =>
+    this.plugin.client.call<Conversation>("conversation.get", { id, limit: 60 }),
+  );
   private homeRevision = 0;
   private markdownCache: MarkdownCache;
   private previousRunning?: boolean;
@@ -230,6 +236,8 @@ export class MobileChatView extends ItemView {
     this.closed = true;
     this.generation++;
     this.homeRevision++;
+    this.prefetchRevision++;
+    this.conversationCache.clear();
     this.saveDraft();
     this.unsubscribe?.();
     clearTimeout(this.refreshTimer);
@@ -470,10 +478,11 @@ export class MobileChatView extends ItemView {
         await this.newConversation();
         return;
       }
-      const list = await this.plugin.client.call<ConversationSummary[]>(
-        "conversation.list",
-        { agentId: agent.id },
-      );
+      const list = this.summariesLoaded
+        ? this.summaries.filter((item) => item.agentId === agent.id && !item.archive)
+        : await this.plugin.client.call<ConversationSummary[]>(
+            "conversation.list", { agentId: agent.id },
+          );
       if (generation !== this.generation || this.closed) return;
       const selected = this.app.loadLocalStorage(
         this.plugin.localKey("selected:" + agent.id),
@@ -492,10 +501,8 @@ export class MobileChatView extends ItemView {
     this.saveDraft();
     const generation = ++this.generation;
     try {
-      const conversation = await this.plugin.client.call<Conversation>(
-        "conversation.get",
-        { id, limit: 60 },
-      );
+      const cached = this.conversationCache.get(id);
+      const conversation = cached ?? await this.conversationCache.load(id);
       if (this.closed || generation !== this.generation) return;
       this.conversation = conversation;
       this.agent = this.plugin.client.description.agents.find(
@@ -515,6 +522,7 @@ export class MobileChatView extends ItemView {
       this.renderHeader();
       this.renderMessages();
       this.controls();
+      if (cached) void this.refreshConversation();
     } catch (e) {
       if (generation === this.generation) this.fail(e);
     }
@@ -567,6 +575,7 @@ export class MobileChatView extends ItemView {
       )
         return;
       this.conversation = value;
+      if (this.limit <= 60) this.conversationCache.put(value);
       if (value.status !== "running") this.streams.delete(id);
       this.renderMessages();
       this.controls();
@@ -648,6 +657,8 @@ export class MobileChatView extends ItemView {
           });
       }
     } else if (event.type === "remote.reset") {
+      this.conversationCache.clear();
+      this.summariesLoaded = false;
       this.streams.clear();
       for (const stream of event.streams ?? [])
         this.streams.set(stream.conversationId, stream);
@@ -684,6 +695,7 @@ export class MobileChatView extends ItemView {
           this.flushStreams();
         }, 32);
     } else if (event.type === "conversation.changed") {
+      this.conversationCache.invalidate(event.id);
       if (event.status !== "running") this.streams.delete(event.id);
       if (event.id === this.conversation?.id) this.queueRefresh();
       if (this.homeMode) void this.refreshHome();
@@ -1404,10 +1416,29 @@ export class MobileChatView extends ItemView {
         );
       if (this.closed || revision !== this.homeRevision) return;
       this.summaries = list;
+      this.summariesLoaded = true;
       if (this.homeMode) this.renderHome();
+      this.prefetchRecent(list);
     } catch (error) {
       if (revision === this.homeRevision && this.homeMode) this.fail(error);
     }
+  }
+  private prefetchRecent(list: ConversationSummary[]) {
+    const revision = ++this.prefetchRevision;
+    const latest = [...latestByAgent(list).values()]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const ids = latest.map((item) => {
+      const selected = this.app.loadLocalStorage(this.plugin.localKey("selected:" + item.agentId));
+      return list.find((entry) => entry.id === selected && entry.agentId === item.agentId && !entry.archive)?.id ?? item.id;
+    }).slice(0, 12);
+    let index = 0;
+    const worker = async () => {
+      while (!this.closed && revision === this.prefetchRevision && index < ids.length) {
+        const id = ids[index++];
+        try { await this.conversationCache.load(id); } catch { /* A tap will retry. */ }
+      }
+    };
+    for (let n = 0; n < Math.min(3, ids.length); n++) void worker();
   }
   private renderHome() {
     if (!this.homeList) return;

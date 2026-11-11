@@ -1,6 +1,6 @@
 # Pi Agent Mobile · 测试版
 
-当前测试版本 **0.2.8**：首页展示今日结果、常用助手和清理过的最近聊天；聊天里的记账与笔记结果用卡片打开，并支持自建 HTTPS 中转。更新说明见 [UI-CHANGELOG.md](UI-CHANGELOG.md)。
+当前测试版本 **0.2.9**：首页展示今日结果、常用助手和清理过的最近聊天；聊天里的记账与笔记结果用卡片打开，并支持自建 HTTPS 中转。更新说明见 [UI-CHANGELOG.md](UI-CHANGELOG.md)。
 
 Android / iPhone 上的 Obsidian 交互插件：手机聊天，电脑执行模型、Skills、MCP、笔记与命令任务。
 
@@ -15,7 +15,7 @@ Android / iPhone 上的 Obsidian 交互插件：手机聊天，电脑执行模�
    kabui35783578-cmd/obsidian-pi-agent-mobile
    ```
 
-3. 选择测试版本 **0.2.8**，安装并启用 **Pi Agent Mobile**。已安装旧版的用户，也请在 BRAT 中选择此版本更新。
+3. 选择测试版本 **0.2.9**，安装并启用 **Pi Agent Mobile**。已安装旧版的用户，也请在 BRAT 中选择此版本更新。
 4. 电脑进入“设置 → Obot → 连接 → 手机连接”，启用连接。远程连接使用自建 HTTPS 中转地址生成远程配对码；局域网或 VPN 连接选择手机能访问的电脑地址生成配对码。
 5. 手机打开“Pi Agent Mobile → 电脑连接”，粘贴配对码连接。配对码是 `pi-agent:…` 开头的完整文本，可用扫码工具读取电脑二维码后复制。
 
