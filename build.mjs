@@ -1,5 +1,9 @@
 import { build } from "esbuild";
 import * as fs from "node:fs/promises";
+const marker = "/* Phone companion (source: src/mobile/mobile.css). */";
+const styles = await fs.readFile("styles.css", "utf8");
+if (!styles.includes(marker)) throw Error("Phone CSS marker missing");
+await fs.writeFile("styles.css", styles.slice(0, styles.indexOf(marker)) + marker + "\n" + await fs.readFile("src/mobile/mobile.css", "utf8"));
 const meta = await build({
   entryPoints: ["src/mobile/main.ts"],
   banner: { js: "/*\n" + (await fs.readFile("licenses/relay-notices.txt", "utf8")).replaceAll("*/", "* /") + "\n*/" },

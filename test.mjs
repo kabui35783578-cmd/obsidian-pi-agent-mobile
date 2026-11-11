@@ -40,3 +40,9 @@ test("remote pairing preserves and validates its relay details", async () => {
   assert.throws(() => decodePairCode(encodePairCode({ ...code, endpoint: "http://relay.example" })), /远程连接资料无效/);
   assert.throws(() => decodePairCode(encodePairCode({ ...code, relay: { ...code.relay, route: "invalid" } })), /远程连接资料无效/);
 });
+test("shipped stylesheet includes the current phone styles", async () => {
+  const marker = "/* Phone companion (source: src/mobile/mobile.css). */";
+  const styles = await fs.readFile("styles.css", "utf8");
+  const phone = await fs.readFile("src/mobile/mobile.css", "utf8");
+  assert.equal(styles.slice(styles.indexOf(marker) + marker.length + 1), phone);
+});

@@ -21,6 +21,7 @@ import {
 } from "../shared/mobile-wire.ts";
 
 const SECRET_KEY = "pi-agent-mobile-connection";
+const AUTO_OPEN_KEY = "pi-agent-mobile-auto-open";
 export default class MobilePlugin extends Plugin {
   client = new MobileClient(async (url, envelope) => {
     const response = await requestUrl({
@@ -39,6 +40,12 @@ export default class MobilePlugin extends Plugin {
     return response.json;
   });
   lastNote?: TFile;
+  autoOpen() {
+    return this.app.loadLocalStorage(AUTO_OPEN_KEY) === true;
+  }
+  setAutoOpen(value: boolean) {
+    this.app.saveLocalStorage(AUTO_OPEN_KEY, value);
+  }
   syncMobileChrome() {
     const active =
       (Platform.isMobile || document.body.classList.contains("is-mobile")) &&
@@ -124,7 +131,9 @@ export default class MobilePlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.syncMobileChrome();
       // Obsidian may restore the chat as the active tab from its saved layout.
-      if (this.app.workspace.activeLeaf?.view.getViewType() === MOBILE_VIEW)
+      if ((Platform.isMobile || document.body.classList.contains("is-mobile")) && this.autoOpen())
+        void this.openChat();
+      else if (this.app.workspace.activeLeaf?.view.getViewType() === MOBILE_VIEW)
         void this.leaveChat();
       void this.restore().catch((error) => new Notice(String(error)));
     });
@@ -282,6 +291,13 @@ export class PhoneSettings extends PluginSettingTab {
     el.empty();
     el.addClass("pi-settings", "pi-phone-settings");
     el.createEl("h2", { text: "设置" });
+    new Setting(el)
+      .setName("启动时打开 Obot")
+      .setDesc("打开 Obsidian 时自动进入手机助手。")
+      .addToggle((toggle) => toggle.setValue(this.plugin.autoOpen()).onChange((value) => {
+        try { this.plugin.setAutoOpen(value); }
+        catch (error) { toggle.setValue(!value); new Notice("设置未保存：" + String(error)); }
+      }));
     const card = el.createDiv({ cls: "pi-phone-computer-card" });
     const title = card.createEl("h3", {
       text: this.plugin.client.credential?.vaultName ?? "连接我的电脑",

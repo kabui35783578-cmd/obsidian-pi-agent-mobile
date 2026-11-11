@@ -20,6 +20,7 @@ import { remoteId } from "../shared/mobile-wire.ts";
 import { latestByAgent, toolSteps } from "../shared/conversation-ui.ts";
 import { MarkdownCache } from "../plugin/markdown-cache.ts";
 import { ConversationCache } from "./conversation-cache.ts";
+import { readPhoneFile } from "./local-file.ts";
 import { SlashMenu } from "../plugin/slash-menu.ts";
 import { handleSlashUI } from "../plugin/command-ui.ts";
 import { CommandDraft } from "../plugin/command-draft.ts";
@@ -63,7 +64,8 @@ interface Outbox {
   operationId: string;
   id: string;
   text: string;
-  attachment?: { path: string; text: string };
+  attachment?: { path: string; text: string; local?: boolean };
+  image?: { name: string; data: string };
 }
 
 export class MobileChatView extends ItemView {
@@ -79,7 +81,11 @@ export class MobileChatView extends ItemView {
   private slashMenu?: SlashMenu;
   private commandPending = false;
   private attachmentEl!: HTMLElement;
-  private attachment?: { path: string; text: string };
+  private attachment?: { path: string; text: string; local?: boolean };
+  private imageAttachment?: { name: string; data: string };
+  private imageDrafts = new Map<string, { name: string; data: string }>();
+  private fileInput!: HTMLInputElement;
+  private fileSelectionVersion = 0;
   private generation = 0;
   private refreshVersion = 0;
   private closed = false;
@@ -153,6 +159,7 @@ export class MobileChatView extends ItemView {
       cls: "pi-chat-composer pi-home-composer",
     });
     const homeLine = homeComposer.createDiv({ cls: "pi-composer-line" });
+    iconButton(homeLine, "plus", "添加本地文件", () => this.fileInput.click(), "pi-phone-add-file");
     this.homeInput = homeLine.createEl("textarea", {
       attr: {
         rows: "1",
@@ -195,6 +202,13 @@ export class MobileChatView extends ItemView {
     const composer = this.footer.createDiv({ cls: "pi-chat-composer" });
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
     const line = composer.createDiv({ cls: "pi-composer-line" });
+    iconButton(line, "plus", "添加本地文件", () => this.fileInput.click(), "pi-phone-add-file");
+    this.fileInput = el.createEl("input", { type: "file", attr: { hidden: "", accept: ".md,.canvas,.base,.txt,.json,.csv,.tsv,.yaml,.yml,.png,.jpg,.jpeg,.webp,.gif" } });
+    this.fileInput.addEventListener("change", () => {
+      const file = this.fileInput.files?.[0];
+      this.fileInput.value = "";
+      if (file) void this.attachLocalFile(file);
+    });
     this.input = line.createEl("textarea", {
       attr: {
         rows: "1",
@@ -405,7 +419,7 @@ export class MobileChatView extends ItemView {
       this.sending ||
       !this.conversation ||
       Boolean(this.conversation.archive) ||
-      (!running && !this.input.value.trim() && !this.outbox());
+      (!running && !this.input.value.trim() && !this.attachment && !this.imageAttachment && !this.outbox());
     this.input.disabled = this.sending;
     this.input.placeholder = this.conversation?.archive
       ? "已归档，点助手名开始新聊天"
@@ -427,16 +441,18 @@ export class MobileChatView extends ItemView {
         agent ? "发送给" + agent.name : "发送",
       );
     }
-    if (this.shownAttachment === (this.attachment?.path ?? "")) return;
-    this.shownAttachment = this.attachment?.path ?? "";
+    const attachmentName = this.imageAttachment?.name ?? this.attachment?.path ?? "";
+    if (this.shownAttachment === attachmentName) return;
+    this.shownAttachment = attachmentName;
     this.attachmentEl.empty();
-    if (this.attachment) {
+    if (attachmentName) {
       const button = this.attachmentEl.createEl("button", {
-        text: "手机笔记副本 · " + this.attachment.path + " ×",
+        text: "本地文件 · " + attachmentName + " ×",
         cls: "pi-text-button",
       });
       button.addEventListener("click", () => {
         this.attachment = undefined;
+        this.imageAttachment = undefined;
         this.saveDraft();
         this.controls();
       });
@@ -446,11 +462,14 @@ export class MobileChatView extends ItemView {
     return this.plugin.localKey("draft:" + id);
   }
   private saveDraft() {
-    if (this.conversation && this.input)
+    if (this.conversation && this.input) {
+      if (this.imageAttachment) this.imageDrafts.set(this.conversation.id, this.imageAttachment);
+      else this.imageDrafts.delete(this.conversation.id);
       this.app.saveLocalStorage(this.draftKey(), {
         text: this.input.value,
         attachment: this.attachment,
       });
+    }
   }
   private outbox(): Outbox | undefined {
     return this.conversation
@@ -459,6 +478,37 @@ export class MobileChatView extends ItemView {
         ) ?? undefined)
       : undefined;
   }
+  private async attachLocalFile(file: File) {
+    const selection = ++this.fileSelectionVersion;
+    const generation = this.generation;
+    const wasHome = this.homeMode;
+    const homeText = wasHome ? this.homeInput.value : "";
+    try {
+      const value = await readPhoneFile(file);
+      if (this.closed || selection !== this.fileSelectionVersion || generation !== this.generation || this.homeMode !== wasHome) return;
+      if (value.kind === "image" && !this.plugin.client.description?.mobileImageUpload)
+        throw Error("请先更新电脑端 Obot，才能发送手机图片");
+      if (wasHome) {
+        const agent = this.composerAgent();
+        if (!agent || !this.plugin.client.connected) throw Error("请先连接电脑并选择助手");
+        await this.selectAgent(agent);
+        if (selection !== this.fileSelectionVersion || !this.conversation || this.homeMode || this.agent?.id !== agent.id) return;
+        if (homeText && this.homeInput.value === homeText) {
+          this.input.value = [this.input.value, homeText].filter(Boolean).join("\n");
+          this.homeInput.value = "";
+          this.resizeHomeInput();
+          this.resizeInput();
+        }
+      }
+      if (!this.conversation) throw Error("请先打开聊天");
+      this.attachment = value.kind === "text" ? { path: value.name, text: value.text, local: true } : undefined;
+      this.imageAttachment = value.kind === "image" ? { name: value.name, data: value.data } : undefined;
+      this.saveDraft();
+      this.controls();
+    } catch (error) {
+      if (selection === this.fileSelectionVersion) this.fail("无法添加文件：" + errorText(error));
+    }
+  }
   private async selectAgent(agent: AgentRecord, fresh = false) {
     this.saveDraft();
     this.agent = agent;
@@ -466,6 +516,7 @@ export class MobileChatView extends ItemView {
     this.conversation = undefined;
     this.input.value = "";
     this.attachment = undefined;
+    this.imageAttachment = undefined;
     this.error = "";
     this.limit = 60;
     const generation = ++this.generation;
@@ -499,12 +550,14 @@ export class MobileChatView extends ItemView {
   async openConversation(id: string) {
     this.slashMenu?.close();
     this.saveDraft();
+    this.imageAttachment = undefined;
     const generation = ++this.generation;
     try {
       const cached = this.conversationCache.get(id);
       const conversation = cached ?? await this.conversationCache.load(id);
       if (this.closed || generation !== this.generation) return;
       this.conversation = conversation;
+      this.imageAttachment = this.imageDrafts.get(id);
       this.agent = this.plugin.client.description.agents.find(
         (a: AgentRecord) => a.id === conversation.agentId,
       );
@@ -859,6 +912,10 @@ export class MobileChatView extends ItemView {
           retained,
           message.at,
         );
+      if (message.role === "user" && message.localAttachmentName)
+        row.createDiv({ cls: "pi-muted", text: "本地文件 · " + message.localAttachmentName });
+      if (message.role === "user" && message.imageCount)
+        row.createDiv({ cls: "pi-muted", text: "图片 · " + message.imageCount + " 张" });
       if (events?.length)
         this.renderActivity(events, offset + index, opened, activeIndex);
       for (const record of c.delegations ?? [])
@@ -1300,12 +1357,13 @@ export class MobileChatView extends ItemView {
     if (!skipCommand && (await this.runSlash(this.input.value.trim()))) return;
     if (this.conversation.archive) return;
     const pending = this.outbox();
-    if (!pending && !(commandText ?? this.input.value.trim())) return;
+    if (!pending && !(commandText ?? this.input.value.trim()) && !this.attachment && !this.imageAttachment) return;
     const operation: Outbox = pending ?? {
       operationId: remoteId(),
       id,
-      text: commandText ?? this.input.value.trim(),
+      text: commandText ?? (this.input.value.trim() || "请查看附件。"),
       attachment: commandText ? undefined : this.attachment,
+      image: commandText ? undefined : this.imageAttachment,
       command: Boolean(commandText),
     };
     if (
@@ -1315,15 +1373,20 @@ export class MobileChatView extends ItemView {
       this.fail("消息与笔记过长，请精简后重试");
       return;
     }
-    this.saveDraft();
-    this.app.saveLocalStorage(this.plugin.localKey("outbox:" + id), operation);
+    try {
+      this.saveDraft();
+      this.app.saveLocalStorage(this.plugin.localKey("outbox:" + id), operation);
+    } catch (error) {
+      this.fail("未能保存待发送内容，请检查手机存储空间：" + errorText(error));
+      return;
+    }
     this.sending = true;
     this.error = "";
     this.controls();
     try {
       const result = await this.plugin.client.mutation(
         "chat.submit",
-        { id, text: operation.text, attachment: operation.attachment },
+        { id, text: operation.text, attachment: operation.attachment, image: operation.image },
         operation.operationId,
       );
       if (result.status === "failed" || result.status === "uncertain")
@@ -1343,11 +1406,13 @@ export class MobileChatView extends ItemView {
     if (
       clearDraft &&
       this.conversation?.id === operation.id &&
-      this.input.value.trim() === operation.text
+      (this.input.value.trim() === operation.text ||
+        (!this.input.value.trim() && operation.text === "请查看附件。"))
     ) {
       this.input.value = "";
       this.resizeInput();
       if (!operation.command) this.attachment = undefined;
+      if (!operation.command) this.imageAttachment = undefined;
       this.saveDraft();
     }
     // Save the draft first. A crash between these writes retains the stable

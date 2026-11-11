@@ -926,9 +926,12 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
   border-radius: 50%;
 }
 .pi-phone-view .pi-composer-line > .pi-icon-button:first-child {
-  background: var(--pi-canvas);
-  color: var(--pi-ink);
+  background: var(--pi-surface);
+  color: var(--pi-secondary);
   box-shadow: none;
+}
+.pi-phone-view .pi-composer-line > .pi-phone-add-file {
+  flex-shrink: 0;
 }
 .pi-phone-view .pi-composer-line > .pi-icon-button svg {
   width: 20px;

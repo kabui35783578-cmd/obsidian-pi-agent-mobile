@@ -75,6 +75,8 @@ export interface ChatMessage {
   text: string;
   at: string;
   origin?: Conversation["source"];
+  localAttachmentName?: string;
+  imageCount?: number;
 }
 export interface DelegationRecord {
   conversationId: string;
