@@ -1,3 +1,4 @@
+import { safeRemoteMarkdown } from "./artifacts.ts";
 import { receiptOwner, receiptPositions } from "./collaboration-timeline.ts";
 import { delegationAnchor, isDelegationMessage } from "../shared/delegation.ts";
 import {
@@ -60,8 +61,7 @@ const sourceName = (source: string) =>
   ({ mobile: "手机", desktop: "电脑", weixin: "微信", delegation: "助手任务" })[
     source
   ] ?? source;
-const safeMarkdown = (text: string) =>
-  text.replace(/!\[\[([^\]]+)\]\]/g, "[[$1]]");
+const safeMarkdown = safeRemoteMarkdown;
 interface Outbox {
   command?: boolean;
   operationId: string;

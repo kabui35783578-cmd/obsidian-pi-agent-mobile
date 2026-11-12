@@ -8,6 +8,7 @@ import {
   isSameDay,
   plainPreview,
   presentMessage,
+  safeRemoteMarkdown,
 } from "./artifacts.ts";
 
 test("expense ledger becomes a card and leaves the spoken sentence", () => {
@@ -189,4 +190,24 @@ test("today comparison uses the local calendar day", () => {
   const now = new Date(2026, 10, 10, 13, 45);
   assert.equal(isSameDay(new Date(2026, 10, 10, 8).toISOString(), now), true);
   assert.equal(isSameDay(new Date(2026, 10, 9, 23).toISOString(), now), false);
+});
+
+test("multi-note reports keep Markdown tables and links intact", () => {
+  const text = "| 笔记 | 内容 |\n| --- | --- |\n| [[盒子/影调]] | 画面明暗 |\n| [[盒子/数据|数据]] | 收集分析 |";
+  assert.deepEqual(presentMessage(text, [{name:"vault_read", status:"completed", detail:"盒子/影调.md"}]), [{type:"text",text}]);
+});
+test("a table containing one note remains intact", () => {
+  const text = "| 标题 | 描述 |\n| --- | --- |\n| [[笔记]] | 说明 |";
+  assert.deepEqual(presentMessage(text), [{type:"text",text}]);
+});
+test("a fenced example is not converted into a file card", () => {
+  const text = "示例：\n```md\n[[盒子/笔记]]\n```";
+  assert.deepEqual(presentMessage(text), [{type:"text",text}]);
+});
+
+
+test("table wiki aliases do not split the Markdown cells", () => {
+  assert.equal(safeRemoteMarkdown("| [[笔记|别名]] | 说明 |"), "| [[笔记\\|别名]] | 说明 |");
+  assert.equal(safeRemoteMarkdown("| [[笔记\\|别名]] | 说明 |"), "| [[笔记\\|别名]] | 说明 |");
+  assert.equal(safeRemoteMarkdown("\`\`\`md\n| [[笔记|别名]] |\n\`\`\`"), "\`\`\`md\n| [[笔记|别名]] |\n\`\`\`");
 });

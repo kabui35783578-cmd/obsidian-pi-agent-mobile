@@ -1336,3 +1336,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
 .pi-phone-view .pi-collaboration-bubble p:last-child { margin-bottom: 0; }
 .pi-phone-view .pi-collaboration-footer { padding: 10px 12px 12px; }
 .pi-phone-view button.pi-collaboration-close { font-size: 14px; }
+
+/* File actions stay below a shrinkable filename, even for long note titles. */
+.pi-phone-view .pi-artifact { display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; }
+.pi-phone-view .pi-artifact-file { min-width: 0; width: 100%; box-sizing: border-box; }
+.pi-phone-view .pi-artifact-file-meta { flex: 1 1 0; min-width: 0; overflow: hidden; }
+.pi-phone-view button.pi-artifact-action { flex: 0 0 auto; box-sizing: border-box; }

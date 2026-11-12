@@ -160,9 +160,28 @@ export function shortenPath(path: string, max = 18) {
   return dir.length > 12 ? dir.slice(0, 10) + "…" : dir + "/…";
 }
 
+/** Preserve wiki aliases inside Markdown table cells; prevent remote embeds. */
+export function safeRemoteMarkdown(text: string) {
+  let fenced = false;
+  return text.split("\n").map(line => {
+    if (/^\s*```/.test(line)) { fenced = !fenced; return line; }
+    if (fenced) return line;
+    let value = line.replace(/!\[\[([^\]]+)\]\]/g, "[[$1]]");
+    if (/^\s*\|/.test(value))
+      value = value.replace(/(\[\[[^\]\n|]+)(?<!\\)\|([^\]\n]+\]\])/g, "$1\\|$2");
+    return value;
+  }).join("\n");
+}
+
 export function presentMessage(text: string, tools: ToolHint[] = []): Segment[] {
-  const files = collectFiles(text, tools);
   const expense = findExpense(text);
+  // A report with multiple links or a Markdown table must remain one document.
+  // Turning individual cells into cards destroys the table and its context.
+  const wikiLinks = text.match(/!?\[\[[^\]\n]+\]\]/g) ?? [];
+  const hasTable = /^\s*\|.*\|\s*$/m.test(text);
+  if (!expense && (wikiLinks.length > 1 || hasTable || /^\s*```/m.test(text)))
+    return [{ type: "text", text }];
+  const files = collectFiles(text, tools);
   if (expense && files.length === 1) {
     expense.artifact.path = files[0].path;
     expense.artifact.action = "打开记录";
