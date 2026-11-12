@@ -15,12 +15,19 @@ export function installSwipeNavigation(
     start = { x: touch.clientX, y: touch.clientY, id: touch.identifier };
   };
   const move = (event: TouchEvent) => {
-    if (!start || !active() || event.touches.length !== 1) { reset(); return; }
+    if (!start || event.touches.length !== 1) { reset(); return; }
     const touch = event.touches[0];
     if (touch.identifier !== start.id) { reset(); return; }
     const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
-    if (!direction && Math.max(Math.abs(dx), Math.abs(dy)) >= 8)
-      direction = Math.abs(dx) > Math.abs(dy) * 1.2 ? "horizontal" : "vertical";
+    if (!direction) {
+      // Hold small/diagonal movements at the window boundary until their
+      // direction is clear, so Obsidian cannot begin dragging its drawer.
+      if (Math.max(Math.abs(dx), Math.abs(dy)) >= 3) {
+        if (Math.abs(dx) > Math.abs(dy) * 1.2) direction = "horizontal";
+        else if (Math.abs(dy) > Math.abs(dx) * 1.2) direction = "vertical";
+      }
+      if (!direction) { event.stopImmediatePropagation(); return; }
+    }
     if (direction === "horizontal") {
       distance = dx;
       if (event.cancelable) event.preventDefault();
@@ -28,7 +35,7 @@ export function installSwipeNavigation(
     }
   };
   const end = (event: TouchEvent) => {
-    if (start && active() && direction === "horizontal") {
+    if (start && direction === "horizontal") {
       if (event.cancelable) event.preventDefault();
       event.stopImmediatePropagation();
       if (Math.abs(distance) >= 60) back();

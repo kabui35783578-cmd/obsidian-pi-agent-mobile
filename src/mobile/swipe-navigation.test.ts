@@ -48,3 +48,34 @@ test("vertical scroll, taps, multitouch, and other views are untouched", () => {
   assert.equal(backs, 0);
   assert.equal(hostMoves, 3);
 });
+
+test("small horizontal motion cannot reach the host drawer", () => {
+  const target = new EventTarget(); let hostMoves = 0, backs = 0;
+  installSwipeNavigation(target as unknown as Window, () => true, () => backs++);
+  target.addEventListener("touchmove", () => hostMoves++);
+  target.dispatchEvent(event("touchstart", 100, 100));
+  const ambiguous = event("touchmove", 98, 99);
+  target.dispatchEvent(ambiguous);
+  assert.equal(hostMoves, 0);
+  assert.equal(ambiguous.defaultPrevented, false);
+  const horizontal = event("touchmove", 94, 99);
+  target.dispatchEvent(horizontal);
+  assert.equal(horizontal.defaultPrevented, true);
+  assert.equal(hostMoves, 0);
+  target.dispatchEvent(event("touchend", 94, 99, 0));
+  assert.equal(backs, 0);
+});
+
+test("a gesture captured in chat remains intercepted if active leaf changes mid-swipe", () => {
+  const target = new EventTarget(); let active = true, hostMoves = 0, backs = 0;
+  installSwipeNavigation(target as unknown as Window, () => active, () => backs++);
+  target.addEventListener("touchmove", () => hostMoves++);
+  target.dispatchEvent(event("touchstart", 150, 50));
+  active = false;
+  const move = event("touchmove", 70, 52);
+  target.dispatchEvent(move);
+  target.dispatchEvent(event("touchend", 70, 52, 0));
+  assert.equal(move.defaultPrevented, true);
+  assert.equal(hostMoves, 0);
+  assert.equal(backs, 1);
+});

@@ -4071,3 +4071,11 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
 .pi-phone-view .pi-work-activity > .pi-work-summary { font-size: 13px; padding: 6px 0; }
 .pi-phone-view .pi-work-activity > .pi-activity-list { max-height: 340px; }
 .pi-phone-view .pi-work-step > .pi-tool-event { padding: 10px 12px; }
+
+/* Prevent accidental sideways drift in the phone screens, while preserving vertical scrolling. */
+.pi-phone-view .pi-phone-home-list,
+.pi-phone-view .pi-phone-messages {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
+}
