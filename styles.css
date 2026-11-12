@@ -3937,3 +3937,137 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
 .pi-phone-view .pi-artifact-file { min-width: 0; width: 100%; box-sizing: border-box; }
 .pi-phone-view .pi-artifact-file-meta { flex: 1 1 0; min-width: 0; overflow: hidden; }
 .pi-phone-view button.pi-artifact-action { flex: 0 0 auto; box-sizing: border-box; }
+
+/* Public execution records: the collapsed state is a single quiet line. */
+.pi-work-activity > .pi-work-summary {
+  display: block;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.65;
+  padding: 6px 0;
+  cursor: pointer;
+}
+.pi-work-activity summary::-webkit-details-marker {
+  display: none;
+}
+.pi-work-activity > .pi-activity-list {
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid
+    color-mix(in srgb, var(--background-modifier-border) 38%, transparent);
+  border-radius: 14px;
+  animation: none;
+  scrollbar-color: var(--background-modifier-border-hover) transparent;
+  scrollbar-width: thin;
+}
+.pi-work-chevron {
+  vertical-align: middle;
+  display: inline-flex;
+  flex: 0 0 14px;
+  color: var(--text-muted);
+}
+.pi-work-chevron svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms ease-out;
+}
+.pi-work-activity[open] > summary > .pi-work-chevron svg,
+.pi-work-step[open] > summary > .pi-work-chevron svg {
+  transform: rotate(90deg);
+}
+.pi-work-step + .pi-work-step {
+  border-top: 1px solid
+    color-mix(in srgb, var(--background-modifier-border) 38%, transparent);
+}
+.pi-work-step > .pi-tool-event {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  list-style: none;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.pi-work-step > summary:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.pi-work-step-plain > summary {
+  cursor: default;
+}
+.pi-work-step .pi-step-content {
+  flex: 0 1 auto;
+}
+.pi-work-step .pi-step-status {
+  padding: 0;
+}
+.pi-work-step-state {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.pi-work-step[data-status="failed"] .pi-work-step-state {
+  color: var(--text-error);
+}
+.pi-work-step-detail {
+  padding: 0 14px 12px;
+  overflow-wrap: anywhere;
+}
+.pi-work-step-detail pre {
+  margin: 0;
+  padding: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-radius: 6px;
+  user-select: text;
+}
+.pi-work-step-detail .pi-result-link {
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.pi-work-activity summary:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pi-work-chevron svg {
+    transition: none;
+  }
+}
+
+.pi-work-file-label {
+  color: var(--text-normal);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pi-work-step .pi-work-file-label {
+  font: inherit;
+  padding: 0;
+  height: auto;
+  min-height: 0;
+  white-space: normal;
+  text-align: left;
+}
+
+.pi-phone-view .pi-work-activity { margin: 8px 0 6px; max-width: 100%; }
+.pi-phone-view .pi-work-activity > .pi-work-summary { font-size: 13px; padding: 6px 0; }
+.pi-phone-view .pi-work-activity > .pi-activity-list { max-height: 340px; }
+.pi-phone-view .pi-work-step > .pi-tool-event { padding: 10px 12px; }

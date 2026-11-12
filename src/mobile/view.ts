@@ -1,3 +1,4 @@
+import { WorkActivity } from "../plugin/work-activity.ts";
 import { safeRemoteMarkdown } from "./artifacts.ts";
 import { receiptOwner, receiptPositions } from "./collaboration-timeline.ts";
 import { delegationAnchor, isDelegationMessage } from "../shared/delegation.ts";
@@ -99,6 +100,7 @@ export class MobileChatView extends ItemView {
   private streams = new Map<string, { text: string; seq: number }>();
   private streamNodes = new Map<string, Text>();
   private delegationViews = new Map<string, DelegationFlow>();
+  private activityViews = new Map<string, WorkActivity>();
   private incoming: DelegationRecord[] = [];
   private incomingAgentId?: string;
   private incomingRevision = 0;
@@ -814,13 +816,6 @@ export class MobileChatView extends ItemView {
       100;
     const previousHeight = this.timeline.scrollHeight,
       previousTop = this.timeline.scrollTop;
-    const opened = new Set(
-      [
-        ...this.timeline.querySelectorAll<HTMLDetailsElement>(
-          ".pi-activity[open]",
-        ),
-      ].map((element) => element.dataset.activityKey),
-    );
     const wanted=new Set([...(c.delegations??[]).map(r=>r.conversationId),...this.incoming.map(r=>r.conversationId)]);
     for(const [id,view] of this.delegationViews)if(!wanted.has(id)){view.dispose();this.delegationViews.delete(id);}
     const offset = (c as any).messageOffset ?? 0;
@@ -882,7 +877,6 @@ export class MobileChatView extends ItemView {
       this.renderActivity(
         eventGroups.get(undefined)!,
         undefined,
-        opened,
         activeIndex,
       );
     const incoming = !c.background && !c.execution ? receiptPositions(c.messages, this.incoming) : [];
@@ -934,7 +928,7 @@ export class MobileChatView extends ItemView {
       if (message.role === "user" && message.imageCount)
         row.createDiv({ cls: "pi-muted", text: "图片 · " + message.imageCount + " 张" });
       if (events?.length)
-        this.renderActivity(events, offset + index, opened, activeIndex);
+        this.renderActivity(events, offset + index, activeIndex);
       for (const record of c.delegations ?? [])
         if (delegationAnchor({ ...record, messageIndex: record.messageIndex - offset }, c.messages) === index)
           this.delegation(record, retained);
@@ -978,71 +972,22 @@ export class MobileChatView extends ItemView {
         previousTop + this.timeline.scrollHeight - previousHeight,
       );
   }
-  private renderActivity(
-    events: ToolEvent[],
-    index: number | undefined,
-    opened: Set<string | undefined>,
-    activeIndex: number,
-  ) {
-    const c = this.conversation!;
-    const key = c.id + ":" + (index ?? "legacy");
-    const active =
-      index !== undefined && index === activeIndex && c.status === "running";
+  private renderActivity(events: ToolEvent[], index: number | undefined, activeIndex: number) {
+    const conversation = this.conversation!;
+    const key = conversation.id + ":" + (index ?? "legacy");
+    let view = this.activityViews.get(key);
+    if (!view) {
+      view = new WorkActivity(this.timeline);
+      this.activityViews.set(key, view);
+    } else this.timeline.appendChild(view.el);
     const steps = toolSteps(events);
-    const running =
-      active && [...steps].reverse().find((step) => step.status === "running");
-    const incomplete = steps.some(
-      (step) =>
-        step.status === "failed" || (!active && step.status === "running"),
-    );
-    const records = this.timeline.createEl("details", { cls: "pi-activity" });
-    records.dataset.activityKey = key;
-    if (index !== undefined) records.dataset.messageIndex = String(index);
-    records.open = opened.has(key);
-    records.createEl("summary", {
-      text:
-        index === undefined
-          ? "更早的工作过程 · 未关联消息"
-          : running
-            ? toolLabel(running.name) + "…"
-            : incomplete
-              ? "工作过程 · 有步骤未完成"
-              : "工作过程 · " + steps.length + " 步",
+    const active = index !== undefined && index === activeIndex && conversation.status === "running";
+    view.update(steps, {
+      activeTask: active ? steps.at(-1)?.taskId : undefined,
+      cancelled: conversation.status === "cancelled",
+      legacy: index === undefined,
+      openFile: path => /\.(md|markdown|canvas|base)$/i.test(path) ? () => void this.readNote(path) : undefined,
     });
-    const list = records.createDiv({ cls: "pi-activity-list" });
-    for (const step of steps) {
-      const state =
-        step.status === "running" && !active ? "incomplete" : step.status;
-      const label =
-        state === "failed"
-          ? "失败"
-          : state === "running"
-            ? "执行中"
-            : state === "incomplete"
-              ? "未完成"
-              : "完成";
-      const row = list.createDiv({
-        cls: "pi-tool-event",
-        attr: { "data-status": state },
-      });
-      const status = row.createSpan({
-        cls: "pi-step-status " + state,
-        attr: { "aria-label": label },
-      });
-      setIcon(
-        status,
-        state === "failed"
-          ? "circle-alert"
-          : state === "running"
-            ? "loader-circle"
-            : state === "incomplete"
-              ? "circle-minus"
-              : "check",
-      );
-      const text = row.createDiv({ cls: "pi-step-content" });
-      text.createSpan({ text: toolLabel(step.name) });
-      if (step.detail) text.createDiv({ cls: "pi-muted", text: step.detail });
-    }
   }
   private markdown(text: string, el: HTMLElement) {
     // Intercept internal links above; don't render file embeds from the phone's
@@ -1057,7 +1002,7 @@ export class MobileChatView extends ItemView {
   }
   private clearCollaboration() {
     for(const view of this.delegationViews.values())view.dispose();
-    this.delegationViews.clear();this.incoming=[];this.incomingAgentId=undefined;this.incomingRevision++;
+    this.delegationViews.clear();this.activityViews.clear();this.incoming=[];this.incomingAgentId=undefined;this.incomingRevision++;
   }
   private async refreshIncoming(agentId:string,generation:number) {
     const revision = ++this.incomingRevision;
