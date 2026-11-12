@@ -1,3 +1,4 @@
+import { streamFrame } from "./stream-frame.ts";
 import { WorkActivity } from "../plugin/work-activity.ts";
 import { safeRemoteMarkdown } from "./artifacts.ts";
 import { receiptOwner, receiptPositions } from "./collaboration-timeline.ts";
@@ -756,14 +757,12 @@ export class MobileChatView extends ItemView {
         (this.streamNodes.has(event.conversationId) || this.delegationViews.has(event.conversationId)) &&
         !this.streamTimer
       )
-        this.streamTimer = setTimeout(() => {
-          this.streamTimer = undefined;
-          this.flushStreams();
-        }, 32);
+        this.scheduleStream();
     } else if (event.type === "conversation.changed") {
       if(event.agentId===this.agent?.id && event.source==="delegation") void this.refreshIncoming(event.agentId,this.generation);
       this.conversationCache.invalidate(event.id);
-      if (event.status !== "running") this.streams.delete(event.id);
+      // Keep the current stream visible until its final conversation is fetched.
+      if (event.status !== "running" && event.id !== this.conversation?.id) this.streams.delete(event.id);
       if (event.id === this.conversation?.id) this.queueRefresh();
       if (this.homeMode) void this.refreshHome();
     } else if (event.type === "delegation.updated") {
@@ -850,6 +849,7 @@ export class MobileChatView extends ItemView {
       if (group) group.push(event);
       else eventGroups.set(index, [event]);
     }
+    const shownStream = this.streamNodes.get(c.id)?.data;
     this.messagesComponent?.unload();
     this.messagesComponent = new Component();
     this.messagesComponent.load();
@@ -960,10 +960,13 @@ export class MobileChatView extends ItemView {
         cls: "pi-message-bubble pi-phone-stream",
       });
       const node = document.createTextNode(
-        this.streams.get(c.id)?.text ?? "正在电脑处理…",
+        shownStream && this.streams.get(c.id)?.text.startsWith(shownStream)
+          ? shownStream
+          : this.streams.has(c.id) ? "" : "正在电脑处理…",
       );
       bubble.appendChild(node);
       this.streamNodes.set(c.id, node);
+      if (this.streams.has(c.id)) this.scheduleStream();
     }
     this.timeline.createDiv({
       cls: "pi-phone-result-status",
@@ -1183,20 +1186,33 @@ export class MobileChatView extends ItemView {
       date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
     );
   }
+  private scheduleStream() {
+    if (this.streamTimer || this.closed) return;
+    this.streamTimer = setTimeout(() => {
+      this.streamTimer = undefined;
+      if (this.flushStreams()) this.scheduleStream();
+    }, 16);
+  }
   private flushStreams() {
-    const follow =
-      this.timeline.scrollHeight -
-        this.timeline.scrollTop -
-        this.timeline.clientHeight <
-      100;
+    const follow = this.timeline.scrollHeight - this.timeline.scrollTop - this.timeline.clientHeight < 100;
+    let pending = false, changed = false;
     for (const [id, node] of this.streamNodes) {
       const text = this.streams.get(id)?.text;
       if (text === undefined || !node.isConnected) continue;
-      if (text.startsWith(node.data)) node.appendData(text.slice(node.length));
-      else node.data = text;
+      const frame = streamFrame(text, node.data);
+      if (frame.value !== node.data) {
+        if (frame.value.startsWith(node.data)) node.appendData(frame.value.slice(node.length));
+        else node.data = frame.value;
+        changed = true;
+      }
+      pending ||= frame.pending;
     }
-    for(const [id,view] of this.delegationViews){const text=this.streams.get(id)?.text;if(text)view.stream(text);}
-    if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
+    for (const [id, view] of this.delegationViews) {
+      const text = this.streams.get(id)?.text;
+      if (text) view.stream(text);
+    }
+    if (changed && follow) this.timeline.scrollTop = this.timeline.scrollHeight;
+    return pending;
   }
   private async runSlash(text: string) {
     const command = parseSlash(text);
