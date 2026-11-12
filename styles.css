@@ -4096,7 +4096,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
   font-weight: 600;
 }
 .pi-phone-view .pi-phone-response-status[hidden] { display: none; }
-.pi-phone-response-avatar { flex: 0 0 28px; width: 28px; height: 28px; animation: pi-response-bob 1.3s ease-in-out infinite; transform-origin: center bottom; }
+.pi-phone-response-avatar { flex: 0 0 28px; width: 28px; height: 28px; animation: pi-response-avatar-rotate 2.8s linear infinite; transform-origin: center; }
 .pi-phone-response-avatar .pi-agent-avatar { display: block; width: 28px; height: 28px; }
 .pi-phone-response-text {
   min-width: 0;
@@ -4111,7 +4111,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
   -webkit-text-fill-color: transparent;
   animation: pi-response-shimmer 2.4s linear infinite;
 }
-@keyframes pi-response-bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
+@keyframes pi-response-avatar-rotate { to { transform: rotate(360deg); } }
 @keyframes pi-response-shimmer { from { background-position: 110% 0; } to { background-position: -110% 0; } }
 @media (prefers-reduced-motion: reduce) {
   .pi-phone-response-avatar, .pi-phone-response-text { animation: none; }
