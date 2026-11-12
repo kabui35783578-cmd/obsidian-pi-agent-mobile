@@ -81,6 +81,10 @@ export class MobileChatView extends ItemView {
   private statusEl!: HTMLElement;
   private timeline!: HTMLElement;
   private footer!: HTMLElement;
+  private responseStatus!: HTMLElement;
+  private responseAvatar!: HTMLElement;
+  private responseText!: HTMLElement;
+  private responseAgentId?: string;
   private input!: HTMLTextAreaElement;
   private sendButton!: HTMLButtonElement;
   private slashMenu?: SlashMenu;
@@ -208,6 +212,10 @@ export class MobileChatView extends ItemView {
       },
       true,
     );
+    this.responseStatus = el.createDiv({ cls: "pi-phone-response-status", attr: { role: "status", "aria-live": "polite" } });
+    this.responseAvatar = this.responseStatus.createDiv({ cls: "pi-phone-response-avatar", attr: { "aria-hidden": "true" } });
+    this.responseText = this.responseStatus.createSpan({ cls: "pi-phone-response-text" });
+    this.responseStatus.hidden = true;
     this.footer = el.createDiv({ cls: "pi-composer-dock" });
     const composer = this.footer.createDiv({ cls: "pi-chat-composer" });
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
@@ -417,6 +425,7 @@ export class MobileChatView extends ItemView {
       Boolean(this.error) || !client.connected,
     );
     const running = this.conversation?.status === "running";
+    this.updateResponseStatus();
     if (running !== this.previousRunning) {
       setIcon(this.sendButton, running ? "square" : "arrow-up");
       this.previousRunning = running;
@@ -752,6 +761,7 @@ export class MobileChatView extends ItemView {
         text: (before?.text ?? "") + event.delta,
         seq: event.remoteSequence,
       });
+      if (event.conversationId === this.conversation?.id) this.updateResponseStatus();
       if (
         !this.homeMode &&
         (this.streamNodes.has(event.conversationId) || this.delegationViews.has(event.conversationId)) &&
@@ -784,6 +794,7 @@ export class MobileChatView extends ItemView {
     ) {
       const conversation = this.conversation!;
       conversation.events.push(event);
+      this.updateResponseStatus();
       const key = conversation.id + ":" + (event.messageIndex ?? "legacy");
       const view = this.activityViews.get(key);
       if (view?.el.isConnected) {
@@ -956,13 +967,14 @@ export class MobileChatView extends ItemView {
       const running = this.timeline.createDiv({
         cls: "pi-message pi-message-assistant",
       });
+      running.hidden = !this.streams.get(c.id)?.text && !shownStream;
       const bubble = running.createDiv({
         cls: "pi-message-bubble pi-phone-stream",
       });
       const node = document.createTextNode(
         shownStream && this.streams.get(c.id)?.text.startsWith(shownStream)
           ? shownStream
-          : this.streams.has(c.id) ? "" : "正在电脑处理…",
+          : "",
       );
       bubble.appendChild(node);
       this.streamNodes.set(c.id, node);
@@ -972,7 +984,7 @@ export class MobileChatView extends ItemView {
       cls: "pi-phone-result-status",
       text: {
         idle: "",
-        running: "任务正在电脑执行",
+        running: "",
         failed: "本次任务未完成，请查看错误消息",
         cancelled: "任务已停止，已完成的修改保留",
       }[c.status],
@@ -1186,6 +1198,22 @@ export class MobileChatView extends ItemView {
       date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
     );
   }
+  private updateResponseStatus() {
+    if (!this.responseStatus) return;
+    const c = this.conversation;
+    const visible = !this.homeMode && c?.status === "running" && !!this.agent;
+    this.responseStatus.hidden = !visible;
+    if (!visible || !c || !this.agent) return;
+    if (this.responseAgentId !== this.agent.id) {
+      this.responseAvatar.empty();
+      renderAvatar(this.responseAvatar, this.app, this.agent);
+      this.responseAgentId = this.agent.id;
+    }
+    const live = toolSteps(c.events).reverse().find(event => event.status === "running" &&
+      (event.messageIndex === undefined || event.messageIndex === ((c as any).messageOffset ?? 0) + c.messages.findLastIndex(message => message.role === "user")));
+    const label = live ? "正在" + toolLabel(live.name) + "…" : this.streams.get(c.id)?.text ? "正在回复…" : "正在处理…";
+    if (this.responseText.textContent !== label) this.responseText.setText(label);
+  }
   private scheduleStream() {
     if (this.streamTimer || this.closed) return;
     this.streamTimer = setTimeout(() => {
@@ -1201,6 +1229,7 @@ export class MobileChatView extends ItemView {
       if (text === undefined || !node.isConnected) continue;
       const frame = streamFrame(text, node.data);
       if (frame.value !== node.data) {
+        if (frame.value && node.parentElement?.parentElement) node.parentElement.parentElement.hidden = false;
         if (frame.value.startsWith(node.data)) node.appendData(frame.value.slice(node.length));
         else node.data = frame.value;
         changed = true;
@@ -1435,6 +1464,7 @@ export class MobileChatView extends ItemView {
     this.slashMenu?.close();
     if(home)for(const view of this.delegationViews.values())view.closeDetail();
     this.homeMode = home;
+    this.updateResponseStatus();
     this.home.hidden = !home;
     this.timeline.hidden = home;
     this.footer.hidden = home;
