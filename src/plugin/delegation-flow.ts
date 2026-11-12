@@ -238,7 +238,7 @@ export class DelegationChatModal {
         );
       const agent = this.services.agents().find((a) => a.id === id);
       if (agent) this.services.avatar(pair, agent);
-      pair.createSpan({ text: agent?.name ?? "助手" });
+      pair.createSpan({ cls: "pi-collaboration-pair-name", text: agent?.name ?? "助手" });
     }
     this.modalEl.setAttribute("aria-label", pair.textContent + "的协作对话");
     this.body = this.contentEl.createDiv({

@@ -3900,3 +3900,34 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
     animation: none;
   }
 }
+
+/* Keep the inline collaboration screen inside the phone's system insets. */
+body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
+  inset: max(32px, var(--pi-safe-top)) var(--pi-safe-right) var(--pi-safe-bottom) var(--pi-safe-left);
+}
+.pi-phone-view .pi-collaboration-header { padding: 8px 12px 0; }
+.pi-phone-view .pi-collaboration-pair {
+  flex-wrap: nowrap;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+.pi-phone-view .pi-collaboration-pair-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-phone-view .pi-collaboration-pair .pi-agent-avatar { width: 24px; height: 24px; flex-basis: 24px; }
+.pi-phone-view .pi-collaboration-transcript { padding: 16px 12px; }
+.pi-phone-view .pi-collaboration-date { margin: 20px 0 24px; font-size: 12px; }
+.pi-phone-view .pi-collaboration-sender { font-size: 12px; }
+.pi-phone-view .pi-collaboration-bubble { font-size: 14px; line-height: 1.5; }
+.pi-phone-view .pi-collaboration-bubble p { margin-bottom: 10px; }
+.pi-phone-view .pi-collaboration-bubble p:last-child { margin-bottom: 0; }
+.pi-phone-view .pi-collaboration-footer { padding: 10px 12px 12px; }
+.pi-phone-view button.pi-collaboration-close { font-size: 14px; }
