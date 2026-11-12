@@ -1,3 +1,4 @@
+import { receiptOwner, receiptPositions } from "./collaboration-timeline.ts";
 import { delegationAnchor, isDelegationMessage } from "../shared/delegation.ts";
 import {
   ItemView,
@@ -563,8 +564,9 @@ export class MobileChatView extends ItemView {
       const cached = this.conversationCache.get(id);
       const conversation = cached ?? await this.conversationCache.load(id);
       if (this.closed || generation !== this.generation) return;
+      const previousId = this.conversation?.id;
       this.conversation = conversation;
-      if(this.incomingAgentId !== conversation.agentId){this.clearCollaboration();this.incomingAgentId=conversation.agentId;}
+      if(previousId !== id || this.incomingAgentId !== conversation.agentId){this.clearCollaboration();this.incomingAgentId=conversation.agentId;}
       this.imageAttachment = this.imageDrafts.get(id);
       this.agent = this.plugin.client.description.agents.find(
         (a: AgentRecord) => a.id === conversation.agentId,
@@ -883,7 +885,9 @@ export class MobileChatView extends ItemView {
         opened,
         activeIndex,
       );
+    const incoming = !c.background && !c.execution ? receiptPositions(c.messages, this.incoming) : [];
     for (let index = start; index < c.messages.length; index++) {
+      for (const item of incoming) if (item.index === index || (index === start && item.index < start)) this.delegation(item.record, retained, true);
       const message = c.messages[index];
       if (isDelegationMessage(message, c, offset + index)) continue;
       const previous = c.messages[index - 1];
@@ -935,7 +939,7 @@ export class MobileChatView extends ItemView {
         if (delegationAnchor({ ...record, messageIndex: record.messageIndex - offset }, c.messages) === index)
           this.delegation(record, retained);
     }
-    if (!c.background && !c.execution) for(const record of this.incoming) this.delegation(record,retained,true);
+    for (const item of incoming) if (item.index === c.messages.length) this.delegation(item.record, retained, true);
     if (!c.messages.length && !this.incoming.length)
       this.timeline.createDiv({
         cls: "pi-phone-welcome",
@@ -1057,13 +1061,26 @@ export class MobileChatView extends ItemView {
   }
   private async refreshIncoming(agentId:string,generation:number) {
     const revision = ++this.incomingRevision;
+    const conversation = this.conversation;
+    if (!conversation || conversation.background || conversation.execution) return;
     try {
       const list=await this.plugin.client.call<ConversationSummary[]>("conversation.list",{agentId,includeBackground:true});
       if(this.closed||generation!==this.generation||revision!==this.incomingRevision||this.agent?.id!==agentId)return;
+      const startKey = this.plugin.localKey("collaboration-start:" + conversation.id);
+      const storedStart = this.app.loadLocalStorage(startKey);
+      const startedAt = storedStart || conversation.messages[0]?.at || conversation.updatedAt;
+      if (!storedStart) this.app.saveLocalStorage(startKey, startedAt);
       this.incoming=list.filter(c=>c.source==="delegation"&&c.parent&&c.parent.agentId!==agentId&&!c.archive)
+        .filter(c => {
+          const key = this.plugin.localKey("collaboration-owner:" + c.id);
+          const owner = this.app.loadLocalStorage(key);
+          const chosen = receiptOwner(owner?.conversationId, conversation.id, startedAt, owner?.at ?? c.updatedAt);
+          if (!owner && chosen) this.app.saveLocalStorage(key, { conversationId: chosen, at: c.updatedAt });
+          return chosen === conversation.id;
+        })
         .slice(0,30).reverse().map(c=>({conversationId:c.id,parentConversationId:c.parent!.conversationId,messageIndex:c.parent!.messageIndex,
           fromAgentId:c.parent!.agentId,toAgentId:agentId,task:"",summary:c.title,messageCount:c.messageCount,
-          status:c.status==="running"?"running":c.status==="failed"?"failed":c.status==="cancelled"?"cancelled":c.messageCount===0?"queued":"completed",updatedAt:c.updatedAt}));
+          status:c.status==="running"?"running":c.status==="failed"?"failed":c.status==="cancelled"?"cancelled":c.messageCount===0?"queued":"completed",updatedAt:this.app.loadLocalStorage(this.plugin.localKey("collaboration-owner:" + c.id))?.at ?? c.updatedAt}));
       this.renderMessages();
     } catch { /* Older desktop versions may not expose background records. */ }
   }
