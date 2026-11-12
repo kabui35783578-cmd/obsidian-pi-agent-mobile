@@ -70,7 +70,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   contactsOnStartup: true,
 };
 export interface ChatMessage {
-  kind?: "command";
+  kind?: "command" | "delegation";
   role: "user" | "assistant" | "system";
   text: string;
   at: string;
@@ -79,6 +79,9 @@ export interface ChatMessage {
   imageCount?: number;
 }
 export interface DelegationRecord {
+  summary?: string;
+  messageCount?: number;
+  outcome?: { verification?: string };
   conversationId: string;
   parentConversationId: string;
   messageIndex: number;
@@ -100,6 +103,8 @@ export interface ToolEvent {
   messageIndex?: number;
 }
 export interface Conversation {
+  background?: boolean;
+  execution?: unknown;
   id: string;
   agentId: string;
   source: "desktop" | "weixin" | "delegation" | "mobile";

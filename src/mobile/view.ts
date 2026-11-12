@@ -1,3 +1,4 @@
+import { delegationAnchor, isDelegationMessage } from "../shared/delegation.ts";
 import {
   ItemView,
   Modal,
@@ -20,6 +21,7 @@ import { remoteId } from "../shared/mobile-wire.ts";
 import { latestByAgent, toolSteps } from "../shared/conversation-ui.ts";
 import { MarkdownCache } from "../plugin/markdown-cache.ts";
 import { ConversationCache } from "./conversation-cache.ts";
+import { DelegationFlow } from "../plugin/delegation-flow.ts";
 import { readPhoneFile } from "./local-file.ts";
 import { SlashMenu } from "../plugin/slash-menu.ts";
 import { handleSlashUI } from "../plugin/command-ui.ts";
@@ -95,6 +97,10 @@ export class MobileChatView extends ItemView {
   private streamTimer?: ReturnType<typeof setTimeout>;
   private streams = new Map<string, { text: string; seq: number }>();
   private streamNodes = new Map<string, Text>();
+  private delegationViews = new Map<string, DelegationFlow>();
+  private incoming: DelegationRecord[] = [];
+  private incomingAgentId?: string;
+  private incomingRevision = 0;
   private messagesComponent?: Component;
   private describing?: Promise<void>;
   private error = "";
@@ -252,6 +258,7 @@ export class MobileChatView extends ItemView {
     this.homeRevision++;
     this.prefetchRevision++;
     this.conversationCache.clear();
+    this.clearCollaboration();
     this.saveDraft();
     this.unsubscribe?.();
     clearTimeout(this.refreshTimer);
@@ -557,6 +564,7 @@ export class MobileChatView extends ItemView {
       const conversation = cached ?? await this.conversationCache.load(id);
       if (this.closed || generation !== this.generation) return;
       this.conversation = conversation;
+      if(this.incomingAgentId !== conversation.agentId){this.clearCollaboration();this.incomingAgentId=conversation.agentId;}
       this.imageAttachment = this.imageDrafts.get(id);
       this.agent = this.plugin.client.description.agents.find(
         (a: AgentRecord) => a.id === conversation.agentId,
@@ -575,6 +583,7 @@ export class MobileChatView extends ItemView {
       this.renderHeader();
       this.renderMessages();
       this.controls();
+      void this.refreshIncoming(conversation.agentId,generation);
       if (cached) void this.refreshConversation();
     } catch (e) {
       if (generation === this.generation) this.fail(e);
@@ -740,7 +749,7 @@ export class MobileChatView extends ItemView {
       });
       if (
         !this.homeMode &&
-        this.streamNodes.has(event.conversationId) &&
+        (this.streamNodes.has(event.conversationId) || this.delegationViews.has(event.conversationId)) &&
         !this.streamTimer
       )
         this.streamTimer = setTimeout(() => {
@@ -748,6 +757,7 @@ export class MobileChatView extends ItemView {
           this.flushStreams();
         }, 32);
     } else if (event.type === "conversation.changed") {
+      if(event.agentId===this.agent?.id && event.source==="delegation") void this.refreshIncoming(event.agentId,this.generation);
       this.conversationCache.invalidate(event.id);
       if (event.status !== "running") this.streams.delete(event.id);
       if (event.id === this.conversation?.id) this.queueRefresh();
@@ -809,6 +819,8 @@ export class MobileChatView extends ItemView {
         ),
       ].map((element) => element.dataset.activityKey),
     );
+    const wanted=new Set([...(c.delegations??[]).map(r=>r.conversationId),...this.incoming.map(r=>r.conversationId)]);
+    for(const [id,view] of this.delegationViews)if(!wanted.has(id)){view.dispose();this.delegationViews.delete(id);}
     const offset = (c as any).messageOffset ?? 0;
     const start = Math.max(0, c.messages.length - this.limit);
     const activeIndex =
@@ -873,6 +885,7 @@ export class MobileChatView extends ItemView {
       );
     for (let index = start; index < c.messages.length; index++) {
       const message = c.messages[index];
+      if (isDelegationMessage(message, c, offset + index)) continue;
       const previous = c.messages[index - 1];
       if (
         !previous ||
@@ -919,10 +932,11 @@ export class MobileChatView extends ItemView {
       if (events?.length)
         this.renderActivity(events, offset + index, opened, activeIndex);
       for (const record of c.delegations ?? [])
-        if (record.messageIndex === index + ((c as any).messageOffset ?? 0))
+        if (delegationAnchor({ ...record, messageIndex: record.messageIndex - offset }, c.messages) === index)
           this.delegation(record, retained);
     }
-    if (!c.messages.length)
+    if (!c.background && !c.execution) for(const record of this.incoming) this.delegation(record,retained,true);
+    if (!c.messages.length && !this.incoming.length)
       this.timeline.createDiv({
         cls: "pi-phone-welcome",
         text:
@@ -1037,62 +1051,37 @@ export class MobileChatView extends ItemView {
       this.messagesComponent!,
     ).catch(() => el.setText(text));
   }
-  private delegation(record: DelegationRecord, retained: Set<string>) {
-    const el = this.timeline.createDiv({ cls: "pi-delegation" });
-    el.dataset.conversationId = record.conversationId;
-    const agents = this.plugin.client.description.agents as AgentRecord[];
-    const from = agents.find((a) => a.id === record.fromAgentId),
-      target = agents.find((a) => a.id === record.toAgentId);
-    const route = el.createDiv({ cls: "pi-delegation-route" });
-    route.createSpan({ text: (from?.name ?? "总管") + " 已发消息给 " });
-    if (target) renderAvatar(route, this.app, target);
-    route
-      .createEl("button", {
-        text: target?.name ?? "助手",
-        cls: "pi-text-button",
-      })
-      .addEventListener(
-        "click",
-        () => void this.openConversation(record.conversationId),
-      );
-    el.createDiv({ cls: "pi-delegation-task", text: record.task });
-    el.createDiv({
-      cls: "pi-delegation-status",
-      text:
-        {
-          queued: "排队中",
-          running: "正在处理",
-          completed: "已回复",
-          cancelled: "已停止",
-          failed: "未完成",
-        }[record.status] +
-        (record.progress && record.status === "running"
-          ? " · " + toolLabel(record.progress)
-          : ""),
-    });
-    const reply = el.createDiv({ cls: "pi-delegation-reply" });
-    if (record.status === "running") {
-      const node = document.createTextNode(
-        this.streams.get(record.conversationId)?.text ?? "",
-      );
-      reply.appendChild(node);
-      this.streamNodes.set(record.conversationId, node);
-    } else if (
-      record.status === "completed" &&
-      record.result &&
-      presentMessage(record.result).some((segment) => segment.type === "artifact")
-    )
-      this.renderRichText(
-        reply,
-        "deleg:" + record.conversationId,
-        record.result,
-        [],
-        retained,
-      );
-    else {
-      reply.addClass("markdown-rendered");
-      this.markdown(record.result || record.error || "", reply);
-    }
+  private clearCollaboration() {
+    for(const view of this.delegationViews.values())view.dispose();
+    this.delegationViews.clear();this.incoming=[];this.incomingAgentId=undefined;this.incomingRevision++;
+  }
+  private async refreshIncoming(agentId:string,generation:number) {
+    const revision = ++this.incomingRevision;
+    try {
+      const list=await this.plugin.client.call<ConversationSummary[]>("conversation.list",{agentId,includeBackground:true});
+      if(this.closed||generation!==this.generation||revision!==this.incomingRevision||this.agent?.id!==agentId)return;
+      this.incoming=list.filter(c=>c.source==="delegation"&&c.parent&&c.parent.agentId!==agentId&&!c.archive)
+        .slice(0,30).reverse().map(c=>({conversationId:c.id,parentConversationId:c.parent!.conversationId,messageIndex:c.parent!.messageIndex,
+          fromAgentId:c.parent!.agentId,toAgentId:agentId,task:"",summary:c.title,messageCount:c.messageCount,
+          status:c.status==="running"?"running":c.status==="failed"?"failed":c.status==="cancelled"?"cancelled":c.messageCount===0?"queued":"completed",updatedAt:c.updatedAt}));
+      this.renderMessages();
+    } catch { /* Older desktop versions may not expose background records. */ }
+  }
+  private delegation(record: DelegationRecord, _retained: Set<string>, receiver=false) {
+    let view=this.delegationViews.get(record.conversationId);
+    if(!view){
+      view=new DelegationFlow(this.timeline,this,{
+        app:this.app,viewerAgentId:receiver?this.agent?.id:undefined,
+        agents:()=>this.plugin.client.description.agents as AgentRecord[],
+        avatar:(el,agent)=>{renderAvatar(el,this.app,agent);},
+        load:(id,before)=>this.plugin.client.call("conversation.get",{id,limit:60,...(before===undefined?{}:{before})}),
+        subscribe:(listener)=>this.plugin.client.subscribe(listener),
+        render:(text,el,owner)=>MarkdownRenderer.render(this.app,safeMarkdown(text),el,"",owner).catch(()=>el.setText(text)),
+      },record);
+      this.delegationViews.set(record.conversationId,view);
+      if(receiver){const date=new Date(record.updatedAt);if(!Number.isNaN(date.getTime()))view.el.prepend(view.el.createDiv({cls:"pi-phone-date",text:this.messageStamp(date)}));}
+    } else {this.timeline.appendChild(view.el);view.update(record);}
+    const text=this.streams.get(record.conversationId)?.text;if(text)view.stream(text);
   }
   private renderRichText(
     parent: HTMLElement,
@@ -1231,6 +1220,7 @@ export class MobileChatView extends ItemView {
       if (text.startsWith(node.data)) node.appendData(text.slice(node.length));
       else node.data = text;
     }
+    for(const [id,view] of this.delegationViews){const text=this.streams.get(id)?.text;if(text)view.stream(text);}
     if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
   }
   private async runSlash(text: string) {
@@ -1452,6 +1442,7 @@ export class MobileChatView extends ItemView {
   }
   private setScreen(home: boolean) {
     this.slashMenu?.close();
+    if(home)for(const view of this.delegationViews.values())view.closeDetail();
     this.homeMode = home;
     this.home.hidden = !home;
     this.timeline.hidden = home;
@@ -1473,6 +1464,7 @@ export class MobileChatView extends ItemView {
     await this.refreshHome();
   }
   navigateBack() {
+    for(const view of this.delegationViews.values())if(view.closeDetail())return;
     // Overlays are above the chat and must close before navigating the page.
     const modal = Array.from(document.querySelectorAll<HTMLElement>(".modal-container"))
       .filter((el) => el.isConnected && !el.hidden).pop();

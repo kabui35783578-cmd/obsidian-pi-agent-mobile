@@ -1,13 +1,13 @@
 {
   "name": "obsidian-pi-agent-mobile",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "private": true,
   "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test.mjs src/mobile/artifacts.test.ts src/mobile/conversation-cache.test.ts src/mobile/swipe-navigation.test.ts src/mobile/local-file.test.ts",
+    "test": "node --experimental-strip-types --test test.mjs delegation.test.mjs src/mobile/artifacts.test.ts src/mobile/conversation-cache.test.ts src/mobile/swipe-navigation.test.ts src/mobile/local-file.test.ts",
     "verify": "npm run typecheck && npm run build && npm test"
   },
   "devDependencies": {
