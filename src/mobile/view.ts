@@ -783,8 +783,18 @@ export class MobileChatView extends ItemView {
       event.type === "tool.event" &&
       event.conversationId === this.conversation?.id
     ) {
-      this.conversation?.events.push(event);
-      this.queueRefresh();
+      const conversation = this.conversation!;
+      conversation.events.push(event);
+      const key = conversation.id + ":" + (event.messageIndex ?? "legacy");
+      const view = this.activityViews.get(key);
+      if (view?.el.isConnected) {
+        const index = event.messageIndex;
+        const steps = toolSteps(conversation.events.filter(item => item.messageIndex === index &&
+          !(conversation.delegations?.some(record => record.messageIndex === index) &&
+            (item.name === "delegate_task" || item.name.startsWith("delegate:")))));
+        this.updateActivity(view, steps, index,
+          ((conversation as any).messageOffset ?? 0) + conversation.messages.findLastIndex(message => message.role === "user"));
+      } else this.queueRefresh();
     } else if (
       event.type === "remote.operation" &&
       event.operation.conversationId === this.conversation?.id
@@ -980,7 +990,10 @@ export class MobileChatView extends ItemView {
       view = new WorkActivity(this.timeline);
       this.activityViews.set(key, view);
     } else this.timeline.appendChild(view.el);
-    const steps = toolSteps(events);
+    this.updateActivity(view, toolSteps(events), index, activeIndex);
+  }
+  private updateActivity(view: WorkActivity, steps: ToolEvent[], index: number | undefined, activeIndex: number) {
+    const conversation = this.conversation!;
     const active = index !== undefined && index === activeIndex && conversation.status === "running";
     view.update(steps, {
       activeTask: active ? steps.at(-1)?.taskId : undefined,

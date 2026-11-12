@@ -9,7 +9,7 @@ import {
   type Envelope,
   type RemoteCredential,
 } from "../shared/mobile-wire.ts";
-import { relayExchange } from "../shared/relay-wire.ts";
+import { relayExchange, relayEventSession } from "../shared/relay-wire.ts";
 export type RemoteTransport = (
   url: string,
   envelope: Envelope,
@@ -26,6 +26,8 @@ export class MobileClient {
   private streamId = "";
   private failures = 0;
   private paused = false;
+  private eventSession?: ReturnType<typeof relayEventSession>;
+  private eventSessionStarted = 0;
   constructor(private transport: RemoteTransport) {}
   subscribe(listener: (event: any) => void) {
     this.listeners.add(listener);
@@ -47,6 +49,7 @@ export class MobileClient {
     method: string,
     params: any,
     relay?: RemoteCredential["relay"],
+    reusableEventChannel = false,
   ) {
     const request = await seal(
       secret,
@@ -54,12 +57,25 @@ export class MobileClient {
       { issuedAt: Date.now(), method, params },
       "request",
     );
+    if (relay && reusableEventChannel && this.eventSession && Date.now() - this.eventSessionStarted >= 40000) {
+      this.eventSession.close();
+      this.eventSession = undefined;
+    }
+    if (relay && reusableEventChannel && !this.eventSession) {
+      this.eventSession = relayEventSession(endpoint, relay);
+      this.eventSessionStarted = Date.now();
+    }
+    const eventSession = reusableEventChannel ? this.eventSession : undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const response = await Promise.race([
-      relay ? relayExchange(endpoint, relay, request) : this.transport(endpoint + REMOTE_PATH, request),
+      relay ? reusableEventChannel ? eventSession!.request(request) : relayExchange(endpoint, relay, request) : this.transport(endpoint + REMOTE_PATH, request),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () => reject(Error("电脑连接超时，请检查同一网络、VPN 和防火墙")),
+          () => {
+            eventSession?.close();
+            if (this.eventSession === eventSession) this.eventSession = undefined;
+            reject(Error("电脑连接超时，请检查同一网络、VPN 和防火墙"));
+          },
           30_000,
         );
       }),
@@ -139,6 +155,7 @@ export class MobileClient {
       method,
       params,
       credential.relay,
+      method === "events.poll",
     );
   }
   mutation<T = any>(
@@ -151,6 +168,9 @@ export class MobileClient {
   pause() {
     this.paused = true;
     this.generation++;
+    this.eventSession?.close();
+    this.eventSession = undefined;
+    this.eventSessionStarted = 0;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
   }
@@ -200,7 +220,7 @@ export class MobileClient {
       () => void this.poll(generation),
       this.failures
         ? Math.min(30_000, 1000 * 2 ** Math.min(this.failures - 1, 5))
-        : 30,
+        : 0,
     );
   }
 }

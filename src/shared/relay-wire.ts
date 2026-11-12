@@ -1,3 +1,4 @@
+import { SequentialSession } from "./sequential-session.ts";
 import { createClientChannel, type Transport } from "@getpaseo/relay/e2ee";
 import { relayEndpoint, type Envelope } from "./mobile-wire.ts";
 
@@ -55,4 +56,31 @@ export function relayExchange(endpoint: string, relay: { route: string; key: str
       })().catch(error => finish(error));
     });
   });
+}
+
+/** Reuse the encrypted channel only for sequential long polls. */
+export function relayEventSession(endpoint: string, relay: { route: string; key: string }) {
+  return new SequentialSession<Envelope, Envelope>((message, fail) => new Promise((resolve, reject) => {
+    const ws = relaySocket(endpoint, relay.route, "client"), transport = relayAdapter(ws);
+    let opened = false, settled = false, closed = false;
+    const timer = setTimeout(() => { if (!settled) { settled = true; ws.close(); reject(Error("远程连接超时")); } }, 25000);
+    const failed = (error: Error) => {
+      if (closed) return;
+      closed = true;
+      if (!settled) { settled = true; clearTimeout(timer); reject(error); }
+      else if (opened) fail(error);
+    };
+    ws.addEventListener("close", () => failed(Error("远程连接已断开")));
+    ws.addEventListener("error", () => failed(Error("远程连接失败")));
+    ws.addEventListener("open", () => {
+      void (async () => {
+        let channel: Awaited<ReturnType<typeof createClientChannel>>;
+        channel = await createClientChannel(transport, relay.key, {
+          onopen: () => { opened = true; if (!settled) { settled = true; clearTimeout(timer); resolve({ send: value => channel.send(JSON.stringify(value)), close: () => { closed = true; ws.close(); } }); } },
+          onmessage: data => { try { if (typeof data !== "string" || data.length > 6_000_000) throw Error(); message(JSON.parse(data)); } catch { fail(Error("远程响应无效")); } },
+          onerror: error => failed(error),
+        });
+      })().catch(error => failed(error instanceof Error ? error : Error(String(error))));
+    });
+  }));
 }
