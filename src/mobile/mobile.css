@@ -1522,3 +1522,48 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
   .pi-phone-response-avatar, .pi-phone-response-text { animation: none; }
   .pi-phone-response-text { background: none; -webkit-text-fill-color: currentColor; }
 }
+
+
+/* Keep chat content beneath a transparent, centered assistant capsule. */
+.pi-phone-view { position: relative; }
+.pi-phone-view:not(.is-home) .pi-phone-header {
+  position: absolute; z-index: 5; top: var(--pi-safe-top, 0px);
+  left: var(--pi-safe-left, 0px); right: var(--pi-safe-right, 0px);
+  height: 52px; background: transparent; pointer-events: none;
+}
+.pi-phone-view:not(.is-home) .pi-phone-header > button { pointer-events: auto; }
+.pi-phone-view:not(.is-home) .pi-phone-header button.pi-phone-identity {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  max-width: calc(100% - 116px); padding: 5px 12px 5px 6px;
+  border: 1px solid var(--pi-line); border-radius: 999px;
+  background: var(--pi-surface);
+}
+.pi-phone-view:not(.is-home) .pi-phone-header button.pi-phone-identity:active {
+  transform: translateX(-50%) scale(.98);
+}
+.pi-phone-view .pi-phone-identity .pi-agent-avatar { width: 28px; height: 28px; flex-basis: 28px; }
+.pi-phone-view:not(.is-home) .pi-phone-messages { padding-top: 64px; scroll-padding-top: 64px; }
+.pi-phone-view:not(.is-home) .pi-phone-connection:not([hidden]) { margin-top: 56px; }
+
+/* The exchange header floats over its messages; only its capsule is opaque. */
+body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 0 var(--pi-safe-right) var(--pi-safe-bottom) var(--pi-safe-left); }
+.pi-phone-view .pi-collaboration-inline > .pi-collaboration-chat { position: relative; }
+.pi-phone-view .pi-collaboration-header {
+  position: absolute; z-index: 1; inset: var(--pi-safe-top, 0px) 0 auto;
+  display: flex; justify-content: center; padding: 5px 12px 0;
+  background: transparent; pointer-events: none;
+}
+.pi-phone-view button.pi-collaboration-pair {
+  display: flex; align-items: center; justify-content: flex-end; flex: 0 0 auto;
+  box-sizing: border-box; min-height: 44px; height: auto; max-width: calc(100% - 24px);
+  gap: 8px; padding: 5px 12px 5px 6px; border: 1px solid var(--pi-line);
+  border-radius: 999px; background: var(--pi-surface); color: var(--pi-ink);
+  box-shadow: none; overflow: hidden; white-space: nowrap; pointer-events: auto;
+  font-size: 15px; font-weight: 600;
+}
+.pi-phone-view .pi-collaboration-person { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 8px; min-width: 0; max-width: calc((100cqw - 80px) / 2); }
+.pi-phone-view .pi-collaboration-direction { flex: 0 0 auto; }
+.pi-phone-view .pi-collaboration-pair .pi-agent-avatar { width: 28px; height: 28px; flex-basis: 28px; }
+.pi-phone-view .pi-collaboration-transcript { padding: calc(var(--pi-safe-top, 0px) + 64px) 12px 16px; scroll-padding-top: calc(var(--pi-safe-top, 0px) + 64px); }
+.pi-phone-view .pi-collaboration-inline.is-capsule-morphing,
+.theme-dark .pi-phone-view .pi-collaboration-inline.is-capsule-morphing { background: transparent; }

@@ -100,7 +100,7 @@ export class DelegationFlow {
     });
     this.life.register(() => {
       this.disposed = true;
-      this.modal?.close();
+      this.modal?.close(true);
     });
     this.update(record);
   }
@@ -171,7 +171,7 @@ export class DelegationFlow {
     }
     this.streamNode.data = text;
   }
-  closeDetail() { if(!this.modal?.connected)return false;this.modal.close();return true; }
+  closeDetail(immediate = false) { if (!this.modal?.connected) return false; this.modal.close(immediate); return true; }
   dispose() {
     this.owner.removeChild(this.life);
     this.el.remove();
@@ -191,6 +191,15 @@ export class DelegationChatModal {
   private status!: HTMLElement;
   private data?: CollaborationPage;
   private closed = false;
+  private finalized = false;
+  private morphAnimation?: Animation;
+  private contentAnimations: Animation[] = [];
+  private sourceLayers: HTMLElement[] = [];
+  private morphTimer?: ReturnType<typeof setTimeout>;
+  private pair?: HTMLButtonElement;
+  private profile?: HTMLElement;
+  private profileVisibility = "";
+  private profileHidden = false;
   private revision = 0;
   private pending?: Promise<void>;
   private refreshAgain = false;
@@ -211,6 +220,11 @@ export class DelegationChatModal {
     for (const child of Array.from(host.children)) {
       if (!(child instanceof HTMLElement)) continue;
       this.inertSiblings.set(child, child.hasAttribute("inert"));
+      if (child.classList.contains("pi-chat-header")) {
+        for (const action of Array.from(child.children))
+          if (action instanceof HTMLElement && !action.classList.contains("pi-phone-identity"))
+            this.sourceLayers.push(action);
+      } else this.sourceLayers.push(child);
       child.setAttribute("inert", "");
     }
     this.modalEl = host.createDiv({
@@ -218,27 +232,113 @@ export class DelegationChatModal {
       attr: { role: "region" },
     });
     this.contentEl = this.modalEl.createDiv({ cls: "pi-collaboration-chat" });
+    this.profile = host.querySelector<HTMLElement>(".pi-phone-header .pi-phone-identity") ?? undefined;
     this.onOpen();
+    this.morph(true);
   }
-  close() {
-    if (!this.closed) this.onClose();
+  private stopMorph() {
+    if (this.morphTimer) clearTimeout(this.morphTimer);
+    this.morphTimer = undefined;
+    const animation = this.morphAnimation;
+    this.morphAnimation = undefined;
+    animation?.cancel();
+    for (const content of this.contentAnimations) content.cancel();
+    this.contentAnimations = [];
+    if (this.profile && this.profileHidden) this.profile.style.visibility = this.profileVisibility;
+    this.profileHidden = false;
+  }
+  private morph(opening: boolean) {
+    const win = this.modalEl.ownerDocument.defaultView;
+    const pair = this.pair, profile = this.profile;
+    if (!this.anchor.closest(".pi-phone-view") || !pair || !profile ||
+        win?.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+        typeof pair.animate !== "function") {
+      if (!opening) this.onClose();
+      return;
+    }
+    const current = pair.getBoundingClientRect();
+    const transitioning = this.modalEl.classList.contains("is-capsule-morphing");
+    const destination = [this.body, this.status, this.contentEl.querySelector<HTMLElement>(".pi-collaboration-footer")]
+      .filter((element): element is HTMLElement => !!element);
+    const opacity = (element: HTMLElement) => Number(win?.getComputedStyle(element).opacity ?? 1);
+    const sourceBefore = transitioning ? this.sourceLayers.map(opacity) : [];
+    const destinationBefore = transitioning ? destination.map(opacity) : [];
+    this.stopMorph();
+    const full = pair.getBoundingClientRect(), single = profile.getBoundingClientRect();
+    if (!full.width || !single.width) {
+      if (!opening) this.onClose();
+      return;
+    }
+    this.profileVisibility = profile.style.visibility;
+    profile.style.visibility = "hidden";
+    this.profileHidden = true;
+    this.modalEl.classList.add("is-capsule-morphing");
+    const duration = opening ? 260 : 220;
+    this.contentAnimations = [
+      ...this.sourceLayers.map((layer, index) => {
+        const normal = opacity(layer);
+        const from = transitioning ? sourceBefore[index] : opening ? normal : 0;
+        const to = opening ? 0 : normal;
+        return layer.animate([{ opacity: from }, { opacity: to }], { duration, easing: "ease-in-out", fill: "both" });
+      }),
+      ...destination.map((layer, index) => {
+        const normal = opacity(layer);
+        const from = transitioning ? destinationBefore[index] : opening ? 0 : normal;
+        const to = opening ? normal : 0;
+        return layer.animate([{ opacity: from }, { opacity: to }], { duration, easing: "ease-in-out", fill: "both" });
+      }),
+    ];
+    const offsetX = (single.left + single.width / 2) - (full.left + full.width / 2);
+    const offsetY = single.top - full.top;
+    const small = { width: `${single.width}px`, transform: `translate(${offsetX}px, ${offsetY}px)` };
+    const large = { width: `${full.width}px`, transform: "translate(0px, 0px)" };
+    const from = opening ? small : { width: `${current.width || full.width}px`, transform: "translate(0px, 0px)" };
+    const to = opening ? large : small;
+    const animation = pair.animate([from, to], {
+      duration,
+      easing: "cubic-bezier(.2,.8,.2,1)", fill: "both",
+    });
+    this.morphAnimation = animation;
+    const finish = () => {
+      if (this.morphAnimation !== animation || this.finalized) return;
+      this.stopMorph();
+      if (opening) this.modalEl.classList.remove("is-capsule-morphing");
+      else this.onClose();
+    };
+    this.morphTimer = setTimeout(finish, opening ? 340 : 300);
+    void animation.finished.then(finish, () => {});
+  }
+  close(immediate = false) {
+    if (this.finalized) return;
+    if (this.closed) {
+      if (immediate) this.onClose();
+      return;
+    }
+    this.closed = true;
+    ++this.revision;
+    this.life.unload();
+    this.modalEl.setAttribute("inert", "");
+    if (immediate) this.onClose();
+    else this.morph(false);
   }
   onOpen() {
     this.life.load();
     const header = this.contentEl.createDiv({ cls: "pi-collaboration-header" });
-    const pair = header.createDiv({ cls: "pi-collaboration-pair" });
-    for (const [index, id] of [
-      this.record.fromAgentId,
-      this.record.toAgentId,
-    ].entries()) {
-      if (index)
-        setIcon(
-          pair.createSpan({ cls: "pi-collaboration-direction" }),
-          "arrow-left-right",
-        );
+    const pair = header.createEl("button", { cls: "pi-collaboration-pair", attr: { type: "button", "aria-label": "关闭消息流转" } });
+    this.life.registerDomEvent(pair, "click", () => this.close());
+    this.pair = pair;
+    const desktop = !!this.anchor.closest(".pi-phone-view");
+    const selfId = this.services.viewerAgentId ?? this.record.fromAgentId;
+    const ids = desktop
+      ? [selfId === this.record.toAgentId ? this.record.fromAgentId : this.record.toAgentId, selfId]
+      : [this.record.fromAgentId, this.record.toAgentId];
+    for (const [index, id] of ids.entries()) {
+      const person = pair.createSpan({ cls: "pi-collaboration-person" });
       const agent = this.services.agents().find((a) => a.id === id);
-      if (agent) this.services.avatar(pair, agent);
-      pair.createSpan({ cls: "pi-collaboration-pair-name", text: agent?.name ?? "助手" });
+      if (agent) this.services.avatar(person, agent);
+      person.createSpan({ cls: "pi-collaboration-pair-name", text: agent?.name ?? "助手" });
+      if (!index)
+        setIcon(pair.createSpan({ cls: "pi-collaboration-direction" }), "arrow-left-right");
     }
     this.modalEl.setAttribute("aria-label", pair.textContent + "的协作对话");
     this.body = this.contentEl.createDiv({
@@ -471,9 +571,10 @@ export class DelegationChatModal {
     if (follow) this.body.scrollTop = this.body.scrollHeight;
   }
   onClose() {
+    if (this.finalized) return;
+    this.finalized = true;
     this.closed = true;
-    ++this.revision;
-    this.life.unload();
+    this.stopMorph();
     for (const [child, wasInert] of this.inertSiblings)
       if (!wasInert) child.removeAttribute("inert");
     this.inertSiblings.clear();

@@ -793,6 +793,7 @@ export class MobileChatView extends ItemView {
       event.conversationId === this.conversation?.id
     ) {
       const conversation = this.conversation!;
+      const follow = this.timeline.scrollHeight - this.timeline.scrollTop - this.timeline.clientHeight < 100;
       conversation.events.push(event);
       this.updateResponseStatus();
       const key = conversation.id + ":" + (event.messageIndex ?? "legacy");
@@ -804,6 +805,7 @@ export class MobileChatView extends ItemView {
             (item.name === "delegate_task" || item.name.startsWith("delegate:")))));
         this.updateActivity(view, steps, index,
           ((conversation as any).messageOffset ?? 0) + conversation.messages.findLastIndex(message => message.role === "user"));
+        if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
       } else this.queueRefresh();
     } else if (
       event.type === "remote.operation" &&
@@ -1462,7 +1464,7 @@ export class MobileChatView extends ItemView {
   }
   private setScreen(home: boolean) {
     this.slashMenu?.close();
-    if(home)for(const view of this.delegationViews.values())view.closeDetail();
+    if(home)for(const view of this.delegationViews.values())view.closeDetail(true);
     this.homeMode = home;
     this.updateResponseStatus();
     this.home.hidden = !home;
