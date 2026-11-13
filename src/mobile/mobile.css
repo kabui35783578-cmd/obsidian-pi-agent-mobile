@@ -1567,3 +1567,41 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
 .pi-phone-view .pi-collaboration-transcript { padding: calc(var(--pi-safe-top, 0px) + 64px) 12px 16px; scroll-padding-top: calc(var(--pi-safe-top, 0px) + 64px); }
 .pi-phone-view .pi-collaboration-inline.is-capsule-morphing,
 .theme-dark .pi-phone-view .pi-collaboration-inline.is-capsule-morphing { background: transparent; }
+
+/* Floating controls reveal the conversation beneath them on capable WebViews. */
+.pi-phone-view:not(.is-home) .pi-phone-identity-copy {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+}
+.pi-phone-view:not(.is-home) .pi-phone-identity-status .pi-phone-link-text { display: none; }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .pi-phone-view:not(.is-home) .pi-phone-header > button.pi-phone-round,
+  .pi-phone-view:not(.is-home) .pi-phone-header button.pi-phone-identity,
+  .pi-phone-view button.pi-collaboration-pair {
+    background: rgba(250, 250, 252, .48);
+    border: 1px solid rgba(130, 130, 140, .18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .58), 0 2px 8px rgba(0, 0, 0, .06);
+    -webkit-backdrop-filter: blur(14px) saturate(145%);
+    backdrop-filter: blur(14px) saturate(145%);
+  }
+  .theme-dark .pi-phone-view:not(.is-home) .pi-phone-header > button.pi-phone-round,
+  .theme-dark .pi-phone-view:not(.is-home) .pi-phone-header button.pi-phone-identity,
+  .theme-dark .pi-phone-view button.pi-collaboration-pair {
+    background: rgba(38, 38, 42, .55);
+    border-color: rgba(255, 255, 255, .14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 2px 8px rgba(0, 0, 0, .18);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .pi-phone-view:not(.is-home) .pi-phone-header > button.pi-phone-round,
+    .pi-phone-view:not(.is-home) .pi-phone-header button.pi-phone-identity,
+    .pi-phone-view button.pi-collaboration-pair,
+    .theme-dark .pi-phone-view:not(.is-home) .pi-phone-header > button.pi-phone-round,
+    .theme-dark .pi-phone-view:not(.is-home) .pi-phone-header button.pi-phone-identity,
+    .theme-dark .pi-phone-view button.pi-collaboration-pair {
+      background: var(--pi-surface);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+}

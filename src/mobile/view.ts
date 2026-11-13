@@ -399,6 +399,8 @@ export class MobileChatView extends ItemView {
     identityStatus?.classList.toggle("is-on", link.online);
     const identityText = identityStatus?.querySelector(".pi-phone-link-text");
     if (identityText) identityText.textContent = link.text;
+    const identity = this.header.querySelector<HTMLElement>(".pi-phone-identity");
+    identity?.setAttribute("aria-label", `${this.agent?.name ?? "助手"}，${link.text}，聊天操作`);
     identityStatus
       ?.querySelector(".pi-status-dot")
       ?.classList.toggle("is-on", link.online);
