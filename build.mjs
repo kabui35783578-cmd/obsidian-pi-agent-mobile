@@ -6,7 +6,7 @@ if (!styles.includes(marker)) throw Error("Phone CSS marker missing");
 await fs.writeFile("styles.css", styles.slice(0, styles.indexOf(marker)) + marker + "\n" + await fs.readFile("src/mobile/mobile.css", "utf8"));
 const meta = await build({
   entryPoints: ["src/mobile/main.ts"],
-  banner: { js: "/*\n" + (await fs.readFile("licenses/relay-notices.txt", "utf8")).replaceAll("*/", "* /") + "\n*/" },
+  banner: { js: "/*\n" + (await Promise.all(["relay-notices.txt", "office-fflate-MIT.txt", "office-fast-xml-parser-MIT.txt", "office-strnum-MIT.txt", "office-anynum-MIT.txt"].map(name => fs.readFile("licenses/" + name, "utf8")))).join("\n\n").replaceAll("*/", "* /") + "\n*/" },
   bundle: true,
   outfile: "main.js",
   platform: "browser",

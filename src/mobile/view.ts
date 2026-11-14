@@ -221,7 +221,7 @@ export class MobileChatView extends ItemView {
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
     const line = composer.createDiv({ cls: "pi-composer-line" });
     iconButton(line, "plus", "添加本地文件", () => this.fileInput.click(), "pi-phone-add-file");
-    this.fileInput = el.createEl("input", { type: "file", attr: { hidden: "", accept: ".md,.canvas,.base,.txt,.json,.csv,.tsv,.yaml,.yml,.png,.jpg,.jpeg,.webp,.gif" } });
+    this.fileInput = el.createEl("input", { type: "file", attr: { hidden: "", accept: ".md,.canvas,.base,.txt,.json,.csv,.tsv,.yaml,.yml,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif" } });
     this.fileInput.addEventListener("change", () => {
       const file = this.fileInput.files?.[0];
       this.fileInput.value = "";
@@ -507,6 +507,8 @@ export class MobileChatView extends ItemView {
     const homeText = wasHome ? this.homeInput.value : "";
     try {
       const value = await readPhoneFile(file);
+      if (value.kind === "text" && value.text.endsWith("[附件内容过长，已截断；不能将片段当作完整文件。]"))
+        new Notice("文件较长，本次只发送前 80000 个字符。");
       if (this.closed || selection !== this.fileSelectionVersion || generation !== this.generation || this.homeMode !== wasHome) return;
       if (value.kind === "image" && !this.plugin.client.description?.mobileImageUpload)
         throw Error("请先更新电脑端 Obot，才能发送手机图片");
