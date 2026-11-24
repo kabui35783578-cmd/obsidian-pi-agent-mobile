@@ -3512,6 +3512,38 @@ button.pi-today-item + button.pi-today-item {
   background: var(--pi-hover);
   color: var(--pi-ink);
 }
+.pi-phone-attachment-menu {
+  position: absolute;
+  z-index: 3;
+  inset: auto auto calc(100% + 8px) 0;
+  width: min(220px, 100%);
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--pi-line);
+  border-radius: 16px;
+  background: var(--pi-pill);
+  box-shadow: var(--pi-pill-shadow);
+}
+.pi-phone-view .pi-phone-attachment-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--pi-ink);
+  box-shadow: none;
+}
+.pi-phone-attachment-menu button span:first-child { display: grid; }
+.pi-phone-attachment-menu svg { width: 18px; height: 18px; }
+.pi-phone-view .pi-phone-attachment-menu button:is(:active, :focus-visible) {
+  background: var(--pi-hover);
+}
 .pi-phone-view .pi-composer-dock .pi-composer-line textarea {
   min-height: 44px;
   padding-block: 11px;
