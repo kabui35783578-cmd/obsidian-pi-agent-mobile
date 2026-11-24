@@ -3465,6 +3465,7 @@ button.pi-today-item + button.pi-today-item {
   background: var(--pi-surface);
   box-shadow: var(--pi-pill-shadow);
 }
+.pi-phone-view .pi-composer-dock .pi-chat-composer { padding-left: 5px; }
 .pi-phone-view .pi-chat-composer:focus-within {
   background: var(--pi-canvas);
   border-color: color-mix(in srgb, var(--pi-ink) 30%, transparent);
@@ -3502,6 +3503,20 @@ button.pi-today-item + button.pi-today-item {
   border-radius: 50%;
   box-shadow: none;
 }
+/* Leave a full touch target around the compact attachment control. */
+.pi-phone-view .pi-composer-line > button.pi-phone-add-file {
+  flex-basis: 44px;
+  width: 44px;
+  min-height: 44px;
+  height: 44px;
+  background: var(--pi-hover);
+  color: var(--pi-ink);
+}
+.pi-phone-view .pi-composer-dock .pi-composer-line textarea {
+  min-height: 44px;
+  padding-block: 11px;
+}
+.pi-phone-view .pi-composer-dock button.pi-send-button { margin-bottom: 3px; }
 .pi-phone-view .pi-composer-line > .pi-icon-button svg { width: 18px; height: 18px; }
 .pi-phone-view .pi-composer-line > button.pi-send-button { background: var(--pi-ink); color: var(--pi-canvas); }
 .pi-phone-view .pi-composer-line > button.pi-send-button:disabled { background: transparent; color: var(--pi-secondary); opacity: 0.55; }

@@ -254,6 +254,13 @@ export class MobileChatView extends ItemView {
     const composer = this.footer.createDiv({ cls: "pi-chat-composer" });
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
     const line = composer.createDiv({ cls: "pi-composer-line" });
+    iconButton(
+      line,
+      "plus",
+      "添加本地文件",
+      () => this.fileInput.click(),
+      "pi-phone-add-file",
+    );
     this.fileInput = el.createEl("input", { type: "file", attr: { hidden: "", accept: ".md,.canvas,.base,.txt,.json,.csv,.tsv,.yaml,.yml,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif" } });
     this.fileInput.addEventListener("change", () => {
       const file = this.fileInput.files?.[0];
@@ -1881,7 +1888,6 @@ export class MobileChatView extends ItemView {
     sheet.action("square-pen", "新聊天", () => void this.newConversation());
     sheet.action("history", "聊天历史与归档", () => this.history());
     sheet.action("contact-round", "助手资料", () => this.profile());
-    sheet.action("paperclip", "添加本地文件", () => this.fileInput.click());
     sheet.action("settings", "设置与电脑连接", () => this.openSettings());
     sheet.open();
   }
