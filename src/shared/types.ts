@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   contactsOnStartup: true,
 };
 export interface ChatMessage {
+  mobileOperationId?: string;
   kind?: "command" | "delegation";
   role: "user" | "assistant" | "system";
   text: string;

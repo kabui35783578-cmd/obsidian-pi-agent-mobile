@@ -69,6 +69,13 @@ interface Outbox {
   image?: { name: string; data: string };
 }
 
+interface PendingSend {
+  operation: Outbox;
+  after: number;
+  finished?: boolean;
+  failed?: boolean;
+}
+
 export class MobileChatView extends ItemView {
   private agent?: AgentRecord;
   private conversation?: Conversation;
@@ -104,8 +111,9 @@ export class MobileChatView extends ItemView {
   private limit = 60;
   private refreshTimer?: ReturnType<typeof setTimeout>;
   private streamTimer?: ReturnType<typeof setTimeout>;
-  private streams = new Map<string, { text: string; seq: number }>();
+  private streams = new Map<string, { text: string; seq: number; finished?: boolean }>();
   private streamNodes = new Map<string, Text>();
+  private pendingSends = new Map<string, PendingSend>();
   private delegationViews = new Map<string, DelegationFlow>();
   private activityViews = new Map<string, WorkActivity>();
   private incoming: DelegationRecord[] = [];
@@ -453,6 +461,7 @@ export class MobileChatView extends ItemView {
       !client.connected ||
       this.sending ||
       !this.conversation ||
+      (!running && this.pendingSends.has(this.conversation.id) && !this.outbox()) ||
       Boolean(this.conversation.archive) ||
       (!running && !this.input.value.trim() && !this.attachment && !this.imageAttachment && !this.outbox());
     this.input.disabled = this.sending;
@@ -667,6 +676,9 @@ export class MobileChatView extends ItemView {
     const id = this.conversation?.id,
       generation = this.generation;
     if (!id || this.closed) return;
+    const stream = this.streams.get(id);
+    const pending = this.pendingSends.get(id);
+    const pendingFinished = pending?.finished;
     try {
       const value = await this.plugin.client.call<Conversation>(
         "conversation.get",
@@ -681,7 +693,18 @@ export class MobileChatView extends ItemView {
         return;
       this.conversation = value;
       if (this.limit <= 60) this.conversationCache.put(value);
-      if (value.status !== "running") this.streams.delete(id);
+      if (stream?.finished && this.streams.get(id) === stream && value.status !== "running")
+        this.streams.delete(id);
+      if (pending && pendingFinished && this.pendingSends.get(id) === pending) {
+        this.pendingSends.delete(id);
+        if (pending.failed && !this.confirmedPendingSend(value, pending) && !this.input.value.trim()) {
+          this.input.value = pending.operation.text;
+          this.attachment = pending.operation.attachment;
+          this.imageAttachment = pending.operation.image;
+          this.resizeInput();
+          this.saveDraft();
+        }
+      }
       this.renderMessages();
       this.controls();
     } catch (e) {
@@ -777,6 +800,17 @@ export class MobileChatView extends ItemView {
       this.streams.clear();
       for (const stream of event.streams ?? [])
         this.streams.set(stream.conversationId, stream);
+      const id = this.conversation?.id;
+      if (id && !this.homeMode && this.streams.get(id)?.text) {
+        this.ensureStreamNode(id);
+        this.flushStreams();
+        this.scheduleStream();
+      }
+      const pending = id && this.pendingSends.get(id);
+      if (pending && !pending.finished)
+        void this.plugin.client.call("operation.get", { id: pending.operation.operationId })
+          .then((operation) => this.onEvent({ type: "remote.operation", operation }))
+          .catch(() => {});
       this.queueRefresh();
       if (!this.describing)
         this.describing = this.plugin
@@ -796,10 +830,16 @@ export class MobileChatView extends ItemView {
     } else if (event.type === "chat.delta") {
       const before = this.streams.get(event.conversationId);
       if (before && event.remoteSequence <= before.seq) return;
+      const previousText = before?.finished ? "" : before?.text ?? "";
       this.streams.set(event.conversationId, {
-        text: (before?.text ?? "") + event.delta,
+        text: previousText + event.delta,
         seq: event.remoteSequence,
       });
+      if (!this.homeMode && event.conversationId === this.conversation?.id &&
+          !previousText.trim() && event.delta.trim()) {
+        this.ensureStreamNode(event.conversationId);
+        this.flushStreams();
+      }
       if (event.conversationId === this.conversation?.id) this.updateResponseStatus();
       if (
         !this.homeMode &&
@@ -811,7 +851,11 @@ export class MobileChatView extends ItemView {
       if(event.agentId===this.agent?.id && event.source==="delegation") void this.refreshIncoming(event.agentId,this.generation);
       this.conversationCache.invalidate(event.id);
       // Keep the current stream visible until its final conversation is fetched.
-      if (event.status !== "running" && event.id !== this.conversation?.id) this.streams.delete(event.id);
+      const stream = this.streams.get(event.id);
+      if (stream && event.status !== "running") {
+        if (event.id !== this.conversation?.id) this.streams.delete(event.id);
+        else this.streams.set(event.id, { ...stream, finished: true });
+      }
       if (event.id === this.conversation?.id) this.queueRefresh();
       if (this.homeMode) void this.refreshHome();
     } else if (event.type === "delegation.updated") {
@@ -847,9 +891,15 @@ export class MobileChatView extends ItemView {
         if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
       } else this.queueRefresh();
     } else if (
-      event.type === "remote.operation" &&
-      event.operation.conversationId === this.conversation?.id
+      event.type === "remote.operation"
     ) {
+      const pending = this.pendingSends.get(event.operation.conversationId);
+      if (pending && pending.operation.operationId === event.operation.id &&
+          event.operation.status !== "accepted") {
+        pending.finished = true;
+        pending.failed = event.operation.status === "failed";
+      }
+      if (event.operation.conversationId !== this.conversation?.id) return;
       if (
         event.operation.status === "failed" ||
         event.operation.status === "uncertain"
@@ -924,7 +974,7 @@ export class MobileChatView extends ItemView {
         .addEventListener("click", () => void this.readNote(c.archive!.path));
     }
     const pending = this.outbox();
-    if (pending) {
+    if (pending && !this.sending) {
       const warning = this.timeline.createDiv({ cls: "pi-source-banner" });
       warning.createSpan({
         text: "上一条发送结果待确认；重试使用同一个任务编号，避免重复执行。",
@@ -1016,22 +1066,12 @@ export class MobileChatView extends ItemView {
           this.delegation(record, retained);
     }
     for (const item of incoming) if (item.index === c.messages.length) this.delegation(item.record, retained, true);
-    if (c.status === "running") {
-      const running = this.timeline.createDiv({
-        cls: "pi-message pi-message-assistant",
-      });
-      running.hidden = !this.streams.get(c.id)?.text && !shownStream;
-      const bubble = running.createDiv({
-        cls: "pi-message-bubble pi-phone-stream",
-      });
-      const node = document.createTextNode(
-        shownStream && this.streams.get(c.id)?.text.startsWith(shownStream)
-          ? shownStream
-          : "",
-      );
-      bubble.appendChild(node);
-      this.streamNodes.set(c.id, node);
-      if (this.streams.has(c.id)) this.scheduleStream();
+    this.renderPendingSend();
+    if (c.status === "running" || this.streams.get(c.id)?.text) {
+      const stream = this.streams.get(c.id)?.text;
+      const node = this.ensureStreamNode(c.id, stream?.startsWith(shownStream ?? "") ? shownStream : undefined);
+      if (stream && !node.data.trim()) this.flushStreams();
+      if (stream) this.scheduleStream();
     }
     this.timeline.createDiv({
       cls: "pi-phone-result-status",
@@ -1302,6 +1342,47 @@ export class MobileChatView extends ItemView {
     if (changed) this.updateScrollButton();
     return pending;
   }
+  private ensureStreamNode(id: string, text = "") {
+    const existing = this.streamNodes.get(id);
+    if (existing?.isConnected) return existing;
+    const row = this.timeline.createDiv({ cls: "pi-message pi-message-assistant" });
+    row.hidden = !text;
+    this.timeline.querySelector(".pi-phone-result-status")?.before(row);
+    const bubble = row.createDiv({ cls: "pi-message-bubble pi-phone-stream" });
+    const node = this.timeline.ownerDocument.createTextNode(text);
+    bubble.appendChild(node);
+    this.streamNodes.set(id, node);
+    return node;
+  }
+  private confirmedPendingSend(c: Conversation, pending: PendingSend) {
+    const { operation, after } = pending;
+    const offset = (c as Conversation & { messageOffset?: number }).messageOffset ?? 0;
+    return c.messages.some((message, index) =>
+      message.role === "user" &&
+      (message.mobileOperationId === operation.operationId ||
+        (!this.plugin.client.description?.mobileOperationIds &&
+          !message.mobileOperationId && offset + index >= after &&
+          message.origin === "mobile" &&
+          (message.text === operation.text ||
+            (!!operation.attachment && message.text.startsWith(operation.text + "\n\n"))))),
+    );
+  }
+  private renderPendingSend(follow = false) {
+    const c = this.conversation;
+    if (!c) return;
+    const pending = this.pendingSends.get(c.id);
+    if (!pending) return;
+    if (this.confirmedPendingSend(c, pending)) {
+      this.pendingSends.delete(c.id);
+      return;
+    }
+    const row = this.timeline.createDiv({ cls: "pi-message pi-message-user" });
+    row.createDiv({ cls: "pi-message-bubble markdown-rendered", text: pending.operation.text });
+    const streamRow = this.streamNodes.get(c.id)?.parentElement?.parentElement;
+    const status = this.timeline.querySelector(".pi-phone-result-status");
+    (streamRow ?? status)?.before(row);
+    if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
+  }
   private async runSlash(text: string) {
     const command = parseSlash(text);
     if (!command || command.name.startsWith("skill:")) return false;
@@ -1412,8 +1493,8 @@ export class MobileChatView extends ItemView {
     return true;
   }
   private async sendOrStop(skipCommand = false, commandText?: string) {
-    if (!this.conversation || this.sending) return;
-    const id = this.conversation.id;
+    if (!this.conversation || this.sending || this.homeMode) return;
+    const id = this.conversation.id, generation = this.generation;
     if (this.conversation.status === "running" && !skipCommand) {
       try {
         await this.plugin.client.mutation("chat.cancel", { id });
@@ -1423,9 +1504,14 @@ export class MobileChatView extends ItemView {
       }
       return;
     }
-    if (!skipCommand && (await this.runSlash(this.input.value.trim()))) return;
+    const command = parseSlash(this.input.value.trim());
+    if (!skipCommand && command && !command.name.startsWith("skill:") &&
+        (await this.runSlash(this.input.value.trim()))) return;
+    if (this.sending || this.closed || this.generation !== generation || this.conversation?.id !== id)
+      return;
     if (this.conversation.archive) return;
     const pending = this.outbox();
+    if (!pending && this.pendingSends.has(id)) return;
     if (!pending && !(commandText ?? this.input.value.trim()) && !this.attachment && !this.imageAttachment) return;
     const operation: Outbox = pending ?? {
       operationId: remoteId(),
@@ -1451,6 +1537,11 @@ export class MobileChatView extends ItemView {
     }
     this.sending = true;
     this.error = "";
+    if (!operation.command && !this.pendingSends.has(id)) {
+      const offset = (this.conversation as Conversation & { messageOffset?: number }).messageOffset ?? 0;
+      this.pendingSends.set(id, { operation, after: offset + this.conversation.messages.length });
+      this.renderPendingSend(true);
+    }
     this.controls();
     try {
       const result = await this.plugin.client.mutation(
@@ -1461,10 +1552,19 @@ export class MobileChatView extends ItemView {
       if (result.status === "failed" || result.status === "uncertain")
         throw Error(result.error || "任务结果待确认，请查看历史");
       this.accepted(operation);
-      await this.refreshConversation();
+      if (result.status === "completed") {
+        const local = this.pendingSends.get(id);
+        if (local?.operation.operationId === operation.operationId) local.finished = true;
+      }
+      if (!this.closed && this.conversation?.id === id && !this.homeMode)
+        await this.refreshConversation();
     } catch (e) {
-      this.fail(e);
-      this.renderMessages();
+      this.pendingSends.delete(id);
+      this.sending = false;
+      if (!this.closed && this.conversation?.id === id) {
+        this.fail(e);
+        this.renderMessages();
+      }
       if (skipCommand) throw e;
     } finally {
       this.sending = false;
