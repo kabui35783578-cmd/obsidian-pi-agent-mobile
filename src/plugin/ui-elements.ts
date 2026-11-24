@@ -60,10 +60,14 @@ export function renderAvatar(
   const image = app.vault.getAbstractFileByPath(agent.avatar);
   if (builtin) {
     el.addClass("pi-avatar-art");
+    const explicit = agent.avatar?.startsWith("builtin:") ? agent.avatar.slice(8) : undefined;
+    const bundled = explicit && builtinImages && Object.hasOwn(builtinImages, explicit)
+      ? builtinImages[explicit]
+      : builtinImages?.[defaultAvatarId(agent)];
     el.createEl("img", {
       attr: {
         src:
-          builtinImages?.[defaultAvatarId(agent)] ??
+          bundled ??
           app.vault.adapter.getResourcePath(
             app.vault.configDir +
               "/plugins/pi-agent/assets/avatars/" +

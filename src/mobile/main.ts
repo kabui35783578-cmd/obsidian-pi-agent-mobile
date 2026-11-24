@@ -173,10 +173,14 @@ export default class MobilePlugin extends Plugin {
     await this.openChat();
   }
   async refreshDescription() {
+    const credential = this.client.credential;
     const description = await this.client.call("host.describe");
-    if (description.hostId !== this.client.credential?.hostId)
+    if (credential !== this.client.credential || description.hostId !== credential?.hostId)
       throw Error("电脑身份已变化，请重新配对");
     this.client.description = description;
+    for (const leaf of this.app.workspace.getLeavesOfType(MOBILE_VIEW)) {
+      if (leaf.view instanceof MobileChatView) leaf.view.refreshAvatars();
+    }
     return description;
   }
   forget() {

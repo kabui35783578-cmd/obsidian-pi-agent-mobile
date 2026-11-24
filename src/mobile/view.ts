@@ -17,10 +17,9 @@ import { PairPhoneModal, renderPhoneSettings } from "./main.ts";
 import { PhoneSheet } from "./sheet.ts";
 import {
   iconButton,
-  renderAvatar as baseAvatar,
   toolLabel,
 } from "../plugin/ui-elements.ts";
-import { MOBILE_AVATARS } from "./avatar-data.ts";
+import { PhoneAvatars } from "./avatar-sync.ts";
 import { remoteId } from "../shared/mobile-wire.ts";
 import { latestByAgent, toolSteps } from "../shared/conversation-ui.ts";
 import { MarkdownCache } from "../plugin/markdown-cache.ts";
@@ -56,12 +55,6 @@ const ATTACHMENT_TYPES = [
   ".png", ".jpg", ".jpeg", ".webp", ".gif",
   "image/png", "image/jpeg", "image/webp", "image/gif",
 ].join(",");
-// BRAT installs three release files, so phone avatars cannot rely on an assets folder.
-const renderAvatar = (
-  parent: HTMLElement,
-  app: MobilePlugin["app"],
-  agent: AgentRecord,
-) => baseAvatar(parent, app, agent, "", MOBILE_AVATARS);
 const sourceName = (source: string) =>
   ({ mobile: "手机", desktop: "电脑", weixin: "微信", delegation: "助手任务" })[
     source
@@ -139,6 +132,7 @@ export class MobileChatView extends ItemView {
   );
   private homeRevision = 0;
   private markdownCache: MarkdownCache;
+  private avatars: PhoneAvatars;
   private previousRunning?: boolean;
   private shownAttachment?: string;
   constructor(
@@ -147,6 +141,9 @@ export class MobileChatView extends ItemView {
   ) {
     super(leaf);
     this.markdownCache = this.addChild(new MarkdownCache(this.app));
+    this.avatars = new PhoneAvatars(this.app, (agentId, version) =>
+      this.plugin.client.call("agent.avatar", { agentId, version }),
+    );
   }
   getViewType() {
     return MOBILE_VIEW;
@@ -336,7 +333,7 @@ export class MobileChatView extends ItemView {
       avatar: "builtin:coordinator",
       name: "总管",
     } as AgentRecord;
-    renderAvatar(welcome, this.app, manager);
+    this.avatars.render(welcome, manager);
     welcome.createEl("h2", { text: "你的助手，随时聊" });
     welcome.createEl("p", {
       cls: "pi-muted",
@@ -409,7 +406,7 @@ export class MobileChatView extends ItemView {
       cls: "pi-phone-identity",
       attr: { "aria-label": (this.agent?.name ?? "助手") + "，资料与聊天操作" },
     });
-    if (this.agent) renderAvatar(identity, this.app, this.agent);
+    if (this.agent) this.avatars.render(identity, this.agent);
     const copy = identity.createSpan({ cls: "pi-phone-identity-copy" });
     copy.createEl("strong", { text: this.agent?.name ?? "Obot" });
     const status = copy.createSpan({ cls: "pi-phone-identity-status" });
@@ -741,9 +738,19 @@ export class MobileChatView extends ItemView {
       this.fail(e);
     }
   }
+  refreshAvatars() {
+    const agents = this.plugin.client.description?.agents;
+    if (this.closed || !agents) return;
+    if (this.agent) {
+      const current = agents.find((agent: AgentRecord) => agent.id === this.agent?.id);
+      if (current) this.agent = current;
+    }
+    this.avatars.refresh(this.contentEl, agents);
+  }
   private onEvent(event: any) {
     if (this.closed) return;
     if (event.type === "connection") {
+      if (this.plugin.client.connected) this.refreshAvatars();
       this.controls();
       if (
         this.homeMode &&
@@ -853,6 +860,8 @@ export class MobileChatView extends ItemView {
       void this.plugin
         .refreshDescription()
         .then(() => {
+          if (this.closed) return;
+          this.refreshAvatars();
           if (this.homeMode) this.renderHome();
         })
         .catch((e) => this.fail(e));
@@ -930,7 +939,7 @@ export class MobileChatView extends ItemView {
         .addEventListener("click", () => void this.loadOlder());
     if (!c.messages.length && !this.incoming.length && !c.parent && !c.archive && c.status !== "running" && this.agent) {
       const empty = this.timeline.createDiv({ cls: "pi-phone-chat-empty" });
-      renderAvatar(empty, this.app, this.agent);
+      this.avatars.render(empty, this.agent);
       empty.createEl("h3", { text: "和" + this.agent.name + "聊聊" });
       if (this.agent.description) empty.createEl("p", { text: this.agent.description });
     }
@@ -1112,7 +1121,7 @@ export class MobileChatView extends ItemView {
       view=new DelegationFlow(this.timeline,this,{
         app:this.app,viewerAgentId:receiver?this.agent?.id:undefined,
         agents:()=>this.plugin.client.description.agents as AgentRecord[],
-        avatar:(el,agent)=>{renderAvatar(el,this.app,agent);},
+        avatar:(el,agent)=>{this.avatars.render(el, agent);},
         load:(id,before)=>this.plugin.client.call("conversation.get",{id,limit:60,...(before===undefined?{}:{before})}),
         subscribe:(listener)=>this.plugin.client.subscribe(listener),
         render:(text,el,owner)=>MarkdownRenderer.render(this.app,safeMarkdown(text),el,"",owner).catch(()=>el.setText(text)),
@@ -1255,7 +1264,7 @@ export class MobileChatView extends ItemView {
     if (!visible || !c || !this.agent) return;
     if (this.responseAgentId !== this.agent.id) {
       this.responseAvatar.empty();
-      renderAvatar(this.responseAvatar, this.app, this.agent);
+      this.avatars.render(this.responseAvatar, this.agent);
       this.responseAgentId = this.agent.id;
     }
     const live = toolSteps(c.events).reverse().find(event => event.status === "running" &&
@@ -1675,7 +1684,7 @@ export class MobileChatView extends ItemView {
           "aria-label": item.agent.name + "，" + item.brief.title,
         },
       });
-      renderAvatar(button, this.app, item.agent);
+      this.avatars.render(button, item.agent);
       const copy = button.createDiv({ cls: "pi-today-copy" });
       const kicker = copy.createDiv({ cls: "pi-today-kicker" });
       kicker.createEl("strong", { text: item.agent.name });
@@ -1711,7 +1720,7 @@ export class MobileChatView extends ItemView {
         },
       });
       const avatar = button.createSpan({ cls: "pi-phone-pin-avatar" });
-      renderAvatar(avatar, this.app, agent);
+      this.avatars.render(avatar, agent);
       if (index === 0)
         setIcon(avatar.createSpan({ cls: "pi-phone-pin-star", attr: { "aria-hidden": "true" } }), "star");
       avatar.classList.toggle("is-running", running);
@@ -1739,7 +1748,7 @@ export class MobileChatView extends ItemView {
       attr: { type: "button", "aria-label": "与" + agent.name + "聊天" },
     });
     button.dataset.agentId = agent.id;
-    renderAvatar(button, this.app, agent);
+    this.avatars.render(button, agent);
     const body = button.createDiv({ cls: "pi-phone-contact-body" });
     const title = body.createDiv({ cls: "pi-phone-contact-title" });
     title.createEl("strong", { text: agent.name });
@@ -1991,7 +2000,7 @@ export class MobileChatView extends ItemView {
           attr: { "aria-label": "与" + agent.name + "聊天" },
         });
         row.toggleClass("is-active", agent.id === this.agent?.id);
-        renderAvatar(row, this.app, agent);
+        this.avatars.render(row, agent);
         const identity = row.createDiv({ cls: "pi-phone-contact-body" });
         identity.createEl("strong", {
           cls: "pi-phone-picker-name",
@@ -2017,7 +2026,7 @@ export class MobileChatView extends ItemView {
     const agent = this.agent as any;
     const modal = new PhoneSheet(this.app, "助手资料");
     modal.contentEl.addClass("pi-phone-profile");
-    renderAvatar(modal.contentEl, this.app, agent);
+    this.avatars.render(modal.contentEl, agent);
     modal.contentEl.createEl("h3", { text: agent.name });
     modal.contentEl.createEl("p", { text: agent.description, cls: "pi-phone-profile-description" });
     modal.contentEl.createEl("p", {
