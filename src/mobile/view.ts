@@ -50,8 +50,12 @@ import {
 } from "./artifacts.ts";
 
 export const MOBILE_VIEW = "pi-agent-mobile-chat";
-const FILE_TYPES = ".md,.canvas,.base,.txt,.json,.csv,.tsv,.yaml,.yml,.doc,.docx,.xls,.xlsx,.ppt,.pptx";
-const IMAGE_TYPES = ".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif";
+const ATTACHMENT_TYPES = [
+  ".md", ".canvas", ".base", ".txt", ".json", ".csv", ".tsv", ".yaml", ".yml",
+  ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+  ".png", ".jpg", ".jpeg", ".webp", ".gif",
+  "image/png", "image/jpeg", "image/webp", "image/gif",
+].join(",");
 // BRAT installs three release files, so phone avatars cannot rely on an assets folder.
 const renderAvatar = (
   parent: HTMLElement,
@@ -98,10 +102,7 @@ export class MobileChatView extends ItemView {
   private attachment?: { path: string; text: string; local?: boolean };
   private imageAttachment?: { name: string; data: string };
   private imageDrafts = new Map<string, { name: string; data: string }>();
-  private fileInput!: HTMLInputElement;
-  private attachmentMenu?: HTMLElement;
-  private attachmentButton?: HTMLButtonElement;
-  private attachmentEvents?: AbortController;
+  private homeFileInput!: HTMLInputElement;
   private fileSelectionVersion = 0;
   private generation = 0;
   private refreshVersion = 0;
@@ -259,8 +260,19 @@ export class MobileChatView extends ItemView {
     const composer = this.footer.createDiv({ cls: "pi-chat-composer" });
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
     const line = composer.createDiv({ cls: "pi-composer-line" });
-    this.fileInput = this.createAttachmentInput(el, FILE_TYPES + "," + IMAGE_TYPES);
-    this.createAttachmentMenu(composer, line);
+    this.homeFileInput = this.createAttachmentInput(el);
+    this.homeFileInput.hidden = true;
+    const attachment = line.createDiv({ cls: "pi-phone-add-file" });
+    setIcon(attachment.createSpan({ attr: { "aria-hidden": "true" } }), "plus");
+    const picker = this.createAttachmentInput(attachment);
+    // WebKit can anchor its native menu to this rendered input. Preserve the
+    // editor's focus on press and let the input's normal click open the picker.
+    const preserveEditor = (event: MouseEvent) => {
+      if (event.button === 0 && el.ownerDocument.activeElement === this.input)
+        event.preventDefault();
+    };
+    picker.addEventListener("pointerdown", preserveEditor);
+    picker.addEventListener("mousedown", preserveEditor);
     this.input = line.createEl("textarea", {
       attr: {
         rows: "1",
@@ -269,7 +281,6 @@ export class MobileChatView extends ItemView {
       },
     });
     this.input.addEventListener("input", () => {
-      this.setAttachmentMenuOpen(false);
       this.saveDraft();
       this.resizeInput();
       this.controls();
@@ -298,8 +309,6 @@ export class MobileChatView extends ItemView {
     else this.welcome();
   }
   async onClose() {
-    this.setAttachmentMenuOpen(false);
-    this.attachmentEvents?.abort();
     this.slashMenu?.close();
     this.homeSlash?.close();
     this.closeSettings();
@@ -507,10 +516,10 @@ export class MobileChatView extends ItemView {
         ) ?? undefined)
       : undefined;
   }
-  private createAttachmentInput(parent: HTMLElement, accept: string, capture?: string) {
+  private createAttachmentInput(parent: HTMLElement) {
     const input = parent.createEl("input", {
       type: "file",
-      attr: { hidden: "", accept, ...(capture ? { capture } : {}) },
+      attr: { accept: ATTACHMENT_TYPES, "aria-label": "添加附件" },
     });
     input.addEventListener("change", () => {
       const file = input.files?.[0];
@@ -518,82 +527,6 @@ export class MobileChatView extends ItemView {
       if (file) void this.attachLocalFile(file);
     });
     return input;
-  }
-  private createAttachmentMenu(composer: HTMLElement, line: HTMLElement) {
-    const menu = composer.createDiv({
-      cls: "pi-phone-attachment-menu",
-      attr: { hidden: "", role: "group", "aria-label": "添加附件" },
-    });
-    menu.id = "pi-phone-attachment-" + remoteId();
-    this.attachmentMenu = menu;
-    const trigger = iconButton(line, "plus", "添加附件", (event) => {
-      this.setAttachmentMenuOpen(menu.hidden);
-      if (!menu.hidden && event.detail === 0) menu.querySelector("button")?.focus();
-    }, "pi-phone-add-file");
-    trigger.setAttribute("aria-controls", menu.id);
-    trigger.setAttribute("aria-expanded", "false");
-    this.attachmentButton = trigger;
-
-    // Opening the attachment choices must not steal focus from the editor.
-    const preserveEditor = (event: Event) => {
-      if (event instanceof MouseEvent && event.button === 0 && composer.ownerDocument.activeElement === this.input)
-        event.preventDefault();
-    };
-    for (const element of [trigger, menu]) {
-      element.addEventListener("pointerdown", preserveEditor);
-      element.addEventListener("mousedown", preserveEditor);
-    }
-    const choices = [
-      { label: "照片图库", icon: "images", input: this.createAttachmentInput(this.contentEl, IMAGE_TYPES) },
-      { label: "拍照", icon: "camera", input: this.createAttachmentInput(this.contentEl, "image/*", "environment") },
-      { label: "选取文件", icon: "folder-open", input: this.createAttachmentInput(this.contentEl, FILE_TYPES) },
-    ];
-    for (const { label, icon, input } of choices) {
-      const button = menu.createEl("button", { type: "button" });
-      setIcon(button.createSpan({ attr: { "aria-hidden": "true" } }), icon);
-      button.createSpan({ text: label });
-      button.addEventListener("click", () => {
-        this.setAttachmentMenuOpen(false);
-        input.click();
-      });
-    }
-    this.attachmentEvents?.abort();
-    this.attachmentEvents = new AbortController();
-    const signal = this.attachmentEvents.signal;
-    composer.ownerDocument.addEventListener("pointerdown", (event) => {
-      if (!menu.hidden && event.target instanceof Node &&
-          !trigger.contains(event.target) && !menu.contains(event.target))
-        this.setAttachmentMenuOpen(false);
-    }, { signal });
-    const resize = new ResizeObserver(() => this.positionAttachmentMenu());
-    resize.observe(this.contentEl);
-    resize.observe(composer);
-    signal.addEventListener("abort", () => resize.disconnect(), { once: true });
-    composer.addEventListener("keydown", (event) => {
-      if (menu.hidden || event.isComposing || event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      const restoreFocus = menu.contains(composer.ownerDocument.activeElement);
-      this.setAttachmentMenuOpen(false);
-      if (restoreFocus) trigger.focus({ preventScroll: true });
-    }, { signal });
-  }
-  private positionAttachmentMenu() {
-    const menu = this.attachmentMenu;
-    if (!menu || menu.hidden) return;
-    const top = Math.max(
-      this.header.getBoundingClientRect().bottom,
-      menu.ownerDocument.defaultView?.visualViewport?.offsetTop ?? 0,
-    );
-    const anchor = menu.parentElement!.getBoundingClientRect().top;
-    menu.style.maxHeight = Math.max(44, anchor - top - 16) + "px";
-  }
-  private setAttachmentMenuOpen(open: boolean) {
-    if (!this.attachmentMenu || !this.attachmentButton) return;
-    if (open) this.slashMenu?.close();
-    this.attachmentMenu.hidden = !open;
-    this.attachmentButton.setAttribute("aria-expanded", String(open));
-    if (open) this.positionAttachmentMenu();
   }
   private async attachLocalFile(file: File) {
     const selection = ++this.fileSelectionVersion;
@@ -1578,7 +1511,6 @@ export class MobileChatView extends ItemView {
       Math.min(120, Math.max(38, this.input.scrollHeight)) + "px";
   }
   private setScreen(home: boolean) {
-    this.setAttachmentMenuOpen(false);
     this.slashMenu?.close();
     this.homeSlash?.close();
     if(home)for(const view of this.delegationViews.values())view.closeDetail(true);
@@ -1620,10 +1552,6 @@ export class MobileChatView extends ItemView {
     const menu = document.querySelector<HTMLElement>(".menu");
     if (menu) {
       menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      return;
-    }
-    if (this.attachmentMenu && !this.attachmentMenu.hidden) {
-      this.setAttachmentMenuOpen(false);
       return;
     }
     if (this.contentEl.querySelector(".pi-slash-menu:not([hidden])")) {
@@ -1989,12 +1917,11 @@ export class MobileChatView extends ItemView {
       this.homeSearch.focus();
     });
     sheet.action("calendar-days", "今日结果", () => this.showToday());
-    sheet.action("paperclip", "添加本地文件", () => this.fileInput.click());
+    sheet.action("paperclip", "添加本地文件", () => this.homeFileInput.click());
     sheet.open();
   }
   private openSettings() {
     if (this.settings) return;
-    this.setAttachmentMenuOpen(false);
     this.settingsTrigger = this.header.querySelector<HTMLElement>(
       this.homeMode ? ".pi-phone-account" : ".pi-phone-identity",
     ) ?? undefined;
