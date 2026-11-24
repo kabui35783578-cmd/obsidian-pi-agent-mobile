@@ -2,13 +2,14 @@ import {
   Plugin,
   PluginSettingTab,
   Setting,
-  Modal,
+  setIcon,
   Notice,
   requestUrl,
   TFile,
   Platform,
   type WorkspaceLeaf,
 } from "obsidian";
+import { PhoneSheet } from "./sheet.ts";
 import { MobileClient } from "./client.ts";
 import { MobileChatView, MOBILE_VIEW } from "./view.ts";
 import { installSwipeNavigation } from "./swipe-navigation.ts";
@@ -215,16 +216,14 @@ export default class MobilePlugin extends Plugin {
   }
 }
 
-export class PairPhoneModal extends Modal {
+export class PairPhoneModal extends PhoneSheet {
   constructor(
     private plugin: MobilePlugin,
     private initial = "",
   ) {
-    super(plugin.app);
+    super(plugin.app, "连接我的电脑");
   }
   onOpen() {
-    this.modalEl.addClass("pi-phone-modal");
-    this.titleEl.setText("连接我的电脑");
     this.contentEl.createEl("p", {
       text: "在电脑 Obot 设置中打开「连接 → 手机连接」，生成远程配对码，再粘贴到下方。远程配对支持手机流量，电脑需要保持运行。",
     });
@@ -287,130 +286,121 @@ export class PhoneSettings extends PluginSettingTab {
   }
   display() {
     this.unsubscribe?.();
-    const el = this.containerEl;
-    el.empty();
-    el.addClass("pi-settings", "pi-phone-settings");
-    el.createEl("h2", { text: "设置" });
-    new Setting(el)
-      .setName("启动时打开 Obot")
-      .setDesc("打开 Obsidian 时自动进入手机助手。")
-      .addToggle((toggle) => toggle.setValue(this.plugin.autoOpen()).onChange((value) => {
-        try { this.plugin.setAutoOpen(value); }
-        catch (error) { toggle.setValue(!value); new Notice("设置未保存：" + String(error)); }
-      }));
-    const card = el.createDiv({ cls: "pi-phone-computer-card" });
-    const title = card.createEl("h3", {
-      text: this.plugin.client.credential?.vaultName ?? "连接我的电脑",
-    });
-    const status = card.createEl("p", {
-      cls: "pi-phone-computer-status",
-      attr: { role: "status", "aria-live": "polite" },
-    });
-    const update = () => {
-      status.setText(this.plugin.client.status);
-      card.toggleClass("is-connected", this.plugin.client.connected);
-      title.setText(
-        this.plugin.client.description?.vaultName ??
-          this.plugin.client.credential?.vaultName ??
-          "连接我的电脑",
-      );
-      connect.setText(
-        this.plugin.client.connected
-          ? "打开助手"
-          : this.plugin.client.credential
-            ? "重新连接"
-            : "输入配对码",
-      );
-    };
-    const actions = card.createDiv({ cls: "pi-phone-setting-actions" });
-    const connect = actions.createEl("button", {
-      text: this.plugin.client.credential ? "重新连接" : "输入配对码",
-      cls: "mod-cta",
-    });
-    connect.addEventListener("click", async () => {
-      if (this.plugin.client.connected) {
-        (this.app as any).setting.close();
-        await this.plugin.openChat();
-        return;
-      }
-      if (!this.plugin.client.credential) {
-        new PairPhoneModal(this.plugin).open();
-        return;
-      }
-      connect.disabled = true;
-      try {
-        await this.plugin.client.connect(this.plugin.client.credential);
-        update();
-      } catch (error) {
-        new Notice(String(error));
-      } finally {
-        connect.disabled = false;
-      }
-    });
-    update();
-    this.unsubscribe = this.plugin.client.subscribe((event) => {
-      if (event.type === "connection") update();
-    });
-    el.createEl("p", {
-      cls: "pi-muted",
-      text: "手机聊天，电脑执行。电脑上的 Obsidian 需要保持打开。",
-    });
-    const help = el.createEl("details", { cls: "pi-phone-setting-details" });
-    help.createEl("summary", { text: "连接不上？" });
-    help.createEl("p", {
-      text: "确认电脑未休眠、Obsidian 已打开。远程连接请检查两端网络；局域网连接请确认设备处于同一网络。",
-    });
-    const details = el.createEl("details", { cls: "pi-phone-setting-details" });
-    details.createEl("summary", { text: "连接详情与移除" });
-    details.createEl("p", {
-      cls: "pi-phone-endpoint",
-      text: this.plugin.client.credential?.endpoint ?? "尚未配对电脑",
-    });
-    new Setting(details)
-      .setName("与电脑重新配对")
-      .addButton((button) =>
-        button
-          .setButtonText("输入新配对码")
-          .onClick(() => new PairPhoneModal(this.plugin).open()),
-      );
-    new Setting(details)
-      .setName("移除这台电脑")
-      .setDesc("清除此手机的连接。要撤销设备权限，请在电脑上操作。")
-      .addButton((button) =>
-        button
-          .setButtonText("移除连接")
-          .setDisabled(!this.plugin.client.credential)
-          .onClick(() => {
-            const modal = new Modal(this.app);
-            modal.modalEl.addClass("pi-phone-modal");
-            modal.titleEl.setText("移除电脑连接？");
-            modal.contentEl.createEl("p", {
-              text: "聊天记录仍保留在电脑。下次使用需要重新配对。",
-            });
-            new Setting(modal.contentEl)
-              .addButton((b) =>
-                b.setButtonText("取消").onClick(() => modal.close()),
-              )
-              .addButton((b) =>
-                b
-                  .setButtonText("移除连接")
-                  .setWarning()
-                  .onClick(() => {
-                    this.plugin.forget();
-                    modal.close();
-                    this.display();
-                  }),
-              );
-            modal.open();
-          }),
-      );
-    const about = el.createEl("details", { cls: "pi-phone-setting-details" });
-    about.createEl("summary", { text: "助手与数据" });
-    about.createEl("p", {
-      text: "模型、账号、助手权限和工具统一在电脑上设置。任务修改和聊天归档保存在电脑库，手机笔记可作为副本附加，不自动双向同步。锁屏后暂停接收，已提交任务继续执行，回到前台后刷新。",
+    this.unsubscribe = renderPhoneSettings(this.containerEl, this.plugin, () => {
+      (this.app as any).setting.close();
+      void this.plugin.openChat();
     });
   }
   hide() {
     this.unsubscribe?.();
   }
+}
+
+export function renderPhoneSettings(
+  el: HTMLElement,
+  plugin: MobilePlugin,
+  openAssistants: () => void,
+) {
+  el.empty();
+  el.addClass("pi-settings", "pi-phone-settings");
+  el.createEl("h2", { text: "电脑连接" });
+  const card = el.createDiv({ cls: "pi-phone-computer-card" });
+  const head = card.createDiv({ cls: "pi-phone-computer-head" });
+  setIcon(head.createSpan({ cls: "pi-phone-computer-icon", attr: { "aria-hidden": "true" } }), "monitor");
+  const identity = head.createDiv();
+  const title = identity.createEl("h3", {
+    text: plugin.client.credential?.vaultName ?? "连接我的电脑",
+  });
+  const status = identity.createEl("p", {
+    cls: "pi-phone-computer-status",
+    attr: { role: "status", "aria-live": "polite" },
+  });
+  const update = () => {
+    status.setText(plugin.client.status);
+    card.toggleClass("is-connected", plugin.client.connected);
+    card.toggleClass("is-offline", Boolean(plugin.client.credential) && !plugin.client.connected);
+    remove.disabled = !plugin.client.credential;
+    endpoint.setText(plugin.client.credential?.endpoint ?? "尚未配对电脑");
+    title.setText(
+      plugin.client.description?.vaultName ??
+        plugin.client.credential?.vaultName ??
+        "连接我的电脑",
+    );
+    connect.setText(
+      plugin.client.connected
+        ? "打开助手"
+        : plugin.client.credential
+          ? "重新连接"
+          : "输入配对码",
+    );
+  };
+  const actions = card.createDiv({ cls: "pi-phone-setting-actions" });
+  const connect = actions.createEl("button", {
+    text: plugin.client.credential ? "重新连接" : "输入配对码",
+    cls: "mod-cta",
+  });
+  connect.addEventListener("click", async () => {
+    if (plugin.client.connected) {
+      openAssistants();
+      return;
+    }
+    if (!plugin.client.credential) {
+      new PairPhoneModal(plugin).open();
+      return;
+    }
+    connect.disabled = true;
+    try {
+      await plugin.client.connect(plugin.client.credential);
+      update();
+    } catch (error) {
+      new Notice(String(error));
+    } finally {
+      connect.disabled = false;
+    }
+  });
+  el.createEl("p", {
+    cls: "pi-phone-settings-lead",
+    text: "手机聊天，电脑执行。电脑上的 Obsidian 需要保持打开，模型、账号与助手权限在电脑端管理。",
+  });
+  const group = el.createDiv({ cls: "pi-phone-setting-group" });
+  const help = group.createEl("details", { cls: "pi-phone-setting-details" });
+  help.createEl("summary", { text: "连接不上？" });
+  help.createEl("p", {
+    text: "确认电脑未休眠、Obsidian 已打开。远程连接请检查两端网络；局域网连接请确认设备处于同一网络。",
+  });
+  const details = group.createEl("details", { cls: "pi-phone-setting-details" });
+  details.createEl("summary", { text: "连接详情与移除" });
+  const endpoint = details.createEl("p", { cls: "pi-phone-endpoint" });
+  const detailActions = details.createDiv({ cls: "pi-phone-setting-actions" });
+  detailActions.createEl("button", { text: "输入新配对码" })
+    .addEventListener("click", () => new PairPhoneModal(plugin).open());
+  const remove = detailActions.createEl("button", { text: "移除连接", cls: "mod-warning" });
+  remove.addEventListener("click", () => {
+    const modal = new PhoneSheet(plugin.app, "移除电脑连接？");
+    modal.contentEl.createEl("p", {
+      text: "聊天记录仍保留在电脑。下次使用需要重新配对。要撤销设备权限，请在电脑上操作。",
+    });
+    modal.action("x", "取消", () => {});
+    modal.action("unlink", "移除连接", () => {
+      plugin.forget();
+      update();
+    });
+    modal.open();
+  });
+  const about = group.createEl("details", { cls: "pi-phone-setting-details" });
+  about.createEl("summary", { text: "助手与数据说明" });
+  about.createEl("p", {
+    text: "模型、账号、助手权限和工具统一在电脑上设置。任务修改和聊天归档保存在电脑库，手机笔记可作为副本附加，不自动双向同步。锁屏后暂停接收，已提交任务继续执行，回到前台后刷新。",
+  });
+  new Setting(about)
+    .setName("启动时打开 Obot")
+    .setDesc("打开 Obsidian 时自动进入手机助手。")
+    .addToggle((toggle) => toggle.setValue(plugin.autoOpen()).onChange((value) => {
+      try { plugin.setAutoOpen(value); }
+      catch (error) { toggle.setValue(!value); new Notice("设置未保存：" + String(error)); }
+    }));
+  update();
+  return plugin.client.subscribe((event) => {
+    if (event.type === "connection") update();
+  });
 }

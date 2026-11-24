@@ -5,16 +5,16 @@ import { receiptOwner, receiptPositions } from "./collaboration-timeline.ts";
 import { delegationAnchor, isDelegationMessage } from "../shared/delegation.ts";
 import {
   ItemView,
-  Modal,
+  addIcon,
   Notice,
   MarkdownRenderer,
   Component,
   setIcon,
-  Menu,
   type WorkspaceLeaf,
 } from "obsidian";
 import type MobilePlugin from "./main.ts";
-import { PairPhoneModal } from "./main.ts";
+import { PairPhoneModal, renderPhoneSettings } from "./main.ts";
+import { PhoneSheet } from "./sheet.ts";
 import {
   iconButton,
   renderAvatar as baseAvatar,
@@ -40,13 +40,10 @@ import type {
   ToolEvent,
 } from "../shared/types.ts";
 import {
-  connectionCopy,
   describePreview,
   fileChipLabel,
-  greeting,
   isSameDay,
   presentMessage,
-  shortStatus,
   type Artifact,
   type ExpenseArtifact,
   type FileArtifact,
@@ -79,6 +76,12 @@ export class MobileChatView extends ItemView {
   private unsubscribe?: () => void;
   private header!: HTMLElement;
   private statusEl!: HTMLElement;
+  private statusTitle!: HTMLElement;
+  private statusText!: HTMLElement;
+  private retryButton!: HTMLButtonElement;
+  private scrollButton!: HTMLButtonElement;
+  private settings?: HTMLElement;
+  private disposeSettings?: () => void;
   private timeline!: HTMLElement;
   private footer!: HTMLElement;
   private responseStatus!: HTMLElement;
@@ -115,9 +118,12 @@ export class MobileChatView extends ItemView {
   private home!: HTMLElement;
   private homeList!: HTMLElement;
   private homeSearch!: HTMLInputElement;
+  private settingsTrigger?: HTMLElement;
   private homeDock!: HTMLElement;
   private homeInput!: HTMLTextAreaElement;
   private homeSend!: HTMLButtonElement;
+  private homeSlash?: SlashMenu;
+  private submittingFromHome = false;
   private homeMode = true;
   private summaries: ConversationSummary[] = [];
   private summariesLoaded = false;
@@ -146,6 +152,10 @@ export class MobileChatView extends ItemView {
     return "messages-square";
   }
   async onOpen() {
+    addIcon(
+      "pi-phone-obsidian",
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 2.5 6.8 6.4 4.5 14.3 10.5 21.5l7.2-2.4 1.8-8.1zM13.5 2.5 11 11l-6.5 3.3M11 11l6.7 8.1M11 11l8.5 0"/></svg>',
+    );
     this.closed = false;
     this.previousRunning = undefined;
     this.shownAttachment = undefined;
@@ -157,6 +167,12 @@ export class MobileChatView extends ItemView {
       cls: "pi-phone-connection",
       attr: { role: "status", "aria-live": "polite" },
     });
+    setIcon(this.statusEl.createSpan({ cls: "pi-phone-connection-icon", attr: { "aria-hidden": "true" } }), "circle-alert");
+    const statusCopy = this.statusEl.createDiv({ cls: "pi-phone-connection-copy" });
+    this.statusTitle = statusCopy.createEl("strong");
+    this.statusText = statusCopy.createSpan();
+    this.retryButton = this.statusEl.createEl("button", { text: "重试" });
+    this.retryButton.addEventListener("click", () => void this.reconnect());
     this.home = el.createDiv({ cls: "pi-phone-home" });
     const search = this.home.createDiv({
       cls: "pi-phone-home-search",
@@ -169,11 +185,17 @@ export class MobileChatView extends ItemView {
     this.homeSearch.addEventListener("input", () => this.renderHome());
     this.homeList = this.home.createDiv({ cls: "pi-phone-home-list" });
     this.homeDock = this.home.createDiv({ cls: "pi-phone-home-dock" });
+    iconButton(
+      this.homeDock,
+      "pi-phone-obsidian",
+      "返回 Obsidian 笔记",
+      () => void this.plugin.leaveChat(),
+      "pi-phone-round pi-phone-return",
+    );
     const homeComposer = this.homeDock.createDiv({
-      cls: "pi-chat-composer pi-home-composer",
+      cls: "pi-chat-composer",
     });
     const homeLine = homeComposer.createDiv({ cls: "pi-composer-line" });
-    iconButton(homeLine, "plus", "添加本地文件", () => this.fileInput.click(), "pi-phone-add-file");
     this.homeInput = homeLine.createEl("textarea", {
       attr: {
         rows: "1",
@@ -192,6 +214,11 @@ export class MobileChatView extends ItemView {
       () => void this.sendFromHome(),
       "pi-send-button",
     );
+    if (this.homeSlash) this.removeChild(this.homeSlash);
+    this.homeSlash = this.addChild(new SlashMenu(homeComposer, this.homeInput, (text) => {
+      this.homeInput.value = text;
+      void this.sendFromHome();
+    }));
     this.timeline = el.createDiv({
       cls: "pi-chat-messages pi-phone-messages",
       attr: { "aria-label": "电脑助手聊天" },
@@ -217,10 +244,16 @@ export class MobileChatView extends ItemView {
     this.responseText = this.responseStatus.createSpan({ cls: "pi-phone-response-text" });
     this.responseStatus.hidden = true;
     this.footer = el.createDiv({ cls: "pi-composer-dock" });
+    this.scrollButton = iconButton(
+      this.footer, "arrow-down", "回到最新消息",
+      () => { this.timeline.scrollTop = this.timeline.scrollHeight; },
+      "pi-phone-round pi-phone-latest",
+    );
+    this.scrollButton.hidden = true;
+    this.timeline.addEventListener("scroll", () => this.updateScrollButton());
     const composer = this.footer.createDiv({ cls: "pi-chat-composer" });
     this.attachmentEl = composer.createDiv({ cls: "pi-attachment-list" });
     const line = composer.createDiv({ cls: "pi-composer-line" });
-    iconButton(line, "plus", "添加本地文件", () => this.fileInput.click(), "pi-phone-add-file");
     this.fileInput = el.createEl("input", { type: "file", attr: { hidden: "", accept: ".md,.canvas,.base,.txt,.json,.csv,.tsv,.yaml,.yml,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif" } });
     this.fileInput.addEventListener("change", () => {
       const file = this.fileInput.files?.[0];
@@ -264,6 +297,8 @@ export class MobileChatView extends ItemView {
   }
   async onClose() {
     this.slashMenu?.close();
+    this.homeSlash?.close();
+    this.closeSettings();
     this.markdownCache.clear();
     this.closed = true;
     this.generation++;
@@ -281,6 +316,8 @@ export class MobileChatView extends ItemView {
     this.setScreen(true);
     this.homeList.empty();
     this.timeline.empty();
+    this.homeSearch.value = "";
+    this.homeSearch.parentElement!.hidden = true;
     const welcome = this.homeList.createDiv({ cls: "pi-phone-welcome" });
     const manager = {
       avatar: "builtin:coordinator",
@@ -290,19 +327,31 @@ export class MobileChatView extends ItemView {
     welcome.createEl("h2", { text: "你的助手，随时聊" });
     welcome.createEl("p", {
       cls: "pi-muted",
-      text: "连接电脑，就能在这里聊天、处理笔记。",
+      text: "连接电脑后，即可在手机上与你的知识库助手对话、跟进任务与阅读笔记。",
     });
-    welcome
+    const actions = welcome.createDiv({ cls: "pi-phone-welcome-actions" });
+    actions
       .createEl("button", { text: "连接我的电脑", cls: "mod-cta" })
       .addEventListener("click", () => new PairPhoneModal(this.plugin).open());
-    if (this.plugin.client.credential)
-      welcome
-        .createEl("button", { text: "重新连接" })
-        .addEventListener("click", () => {
-          void this.plugin.client
-            .connect(this.plugin.client.credential!)
-            .catch((e) => this.fail(e));
-        });
+    if (!this.plugin.client.credential) {
+      actions.createEl("button", { text: "返回 Obsidian" })
+        .addEventListener("click", () => void this.plugin.leaveChat());
+    }
+  }
+  private async reconnect() {
+    const { client } = this.plugin;
+    this.error = "";
+    this.controls();
+    if (!client.connected && client.credential) {
+      this.retryButton.disabled = true;
+      try {
+        await client.connect(client.credential);
+      } catch (error) {
+        this.fail(error);
+      } finally {
+        this.retryButton.disabled = false;
+      }
+    }
   }
   private fail(error: unknown) {
     if (this.closed) return;
@@ -314,36 +363,23 @@ export class MobileChatView extends ItemView {
     await this.showHome();
   }
   private renderHeader() {
-    if (!this.header) return;
     this.header.empty();
+    this.header.hidden = this.homeMode && !this.plugin.client.description;
+    if (this.header.hidden) return;
     if (this.homeMode) {
-      iconButton(
+      const account = iconButton(
         this.header,
         "user-round",
-        "设置与返回笔记",
-        (event) => this.homeMenu(event),
-        "pi-phone-round pi-phone-account",
+        "设置与电脑连接",
+        () => this.homeMenu(),
+        "pi-phone-round pi-phone-account pi-phone-host",
       );
-      this.header.createDiv({ cls: "pi-phone-header-space" });
-      iconButton(
-        this.header,
-        "search",
-        "搜索助手或聊天",
-        () => {
-          const search = this.homeSearch.parentElement!;
-          search.hidden = !search.hidden;
-          if (!search.hidden) this.homeSearch.focus();
-          else {
-            this.homeSearch.value = "";
-            this.renderHome();
-          }
-        },
-        "pi-phone-round",
-      );
+      const icon = account.firstElementChild;
+      if (icon) account.createSpan({ cls: "pi-phone-account-disc" }).append(icon);
       iconButton(
         this.header,
         "plus",
-        "开始新聊天",
+        "查找助手或开始新聊天",
         () => this.startChat(),
         "pi-phone-round",
       );
@@ -362,70 +398,37 @@ export class MobileChatView extends ItemView {
     });
     if (this.agent) renderAvatar(identity, this.app, this.agent);
     const copy = identity.createSpan({ cls: "pi-phone-identity-copy" });
-    copy.createEl("strong", { text: this.agent?.name ?? "Pi Agent" });
-    const link = copy.createEl("em", { cls: "pi-phone-identity-status" });
-    link.createSpan({ cls: "pi-status-dot" });
-    link.createSpan({ cls: "pi-phone-link-text", text: "电脑状态" });
-    identity.addEventListener("click", (event) => this.chatMenu(event));
-    this.header.createDiv({ cls: "pi-phone-header-space" });
+    copy.createEl("strong", { text: this.agent?.name ?? "Obot" });
+    const status = copy.createSpan({ cls: "pi-phone-identity-status" });
+    status.createSpan({ cls: "pi-phone-live-dot", attr: { "aria-hidden": "true" } });
+    status.createSpan({ text: "正在处理…" });
+    setIcon(identity.createSpan({ cls: "pi-phone-identity-chevron" }), "chevron-down");
+    identity.addEventListener("click", () => this.chatMenu());
     iconButton(
       this.header,
-      "ellipsis",
-      "聊天操作",
-      (event) => this.chatMenu(event),
-      "pi-phone-round",
+      "monitor",
+      "电脑连接与状态",
+      () => this.connectionInfo(),
+      "pi-phone-round pi-phone-host",
     );
   }
   private controls() {
     if (!this.statusEl) return;
     const client = this.plugin.client;
+    const offline = !client.connected && Boolean(client.credential);
+    this.statusTitle.setText(offline ? "电脑连接已断开" : "操作未完成");
     const status = this.error || client.status;
-    if (this.statusEl.textContent !== status) this.statusEl.setText(status);
+    if (this.statusText.textContent !== status) this.statusText.setText(status);
+    this.statusText.hidden = status === this.statusTitle.textContent;
     this.statusEl.hidden =
       !this.error &&
       (client.connected || (this.homeMode && !client.credential));
-    const link = connectionCopy(
-      {
-        connected: client.connected,
-        status: client.status,
-        endpoint: client.credential?.endpoint,
-        hasCredential: Boolean(client.credential),
-      },
-      "chat",
-    );
-    const identityStatus = this.header.querySelector<HTMLElement>(
-      ".pi-phone-identity-status",
-    );
-    identityStatus?.classList.toggle("is-on", link.online);
-    const identityText = identityStatus?.querySelector(".pi-phone-link-text");
-    if (identityText) identityText.textContent = link.text;
-    const identity = this.header.querySelector<HTMLElement>(".pi-phone-identity");
-    identity?.setAttribute("aria-label", `${this.agent?.name ?? "助手"}，${link.text}，聊天操作`);
-    identityStatus
-      ?.querySelector(".pi-status-dot")
-      ?.classList.toggle("is-on", link.online);
-    const homeLink = this.home?.querySelector<HTMLElement>(".pi-home-link");
-    if (homeLink) {
-      const home = connectionCopy(
-        {
-          connected: client.connected,
-          status: client.status,
-          endpoint: client.credential?.endpoint,
-          hasCredential: Boolean(client.credential),
-        },
-        "home",
-      );
-      homeLink.classList.toggle("is-on", home.online);
-      const homeText = homeLink.querySelector(".pi-phone-link-text");
-      if (homeText) homeText.textContent = home.text;
-      homeLink
-        .querySelector(".pi-status-dot")
-        ?.classList.toggle("is-on", home.online);
-    }
-    this.statusEl.toggleClass(
-      "is-error",
-      Boolean(this.error) || !client.connected,
-    );
+    this.retryButton.hidden = client.connected || !client.credential;
+    const host = this.header.querySelector(".pi-phone-host");
+    host?.classList.toggle("is-connected", client.connected);
+    host?.setAttribute("title", client.status);
+    const identityStatus = this.header.querySelector<HTMLElement>(".pi-phone-identity-status");
+    if (identityStatus) identityStatus.hidden = this.conversation?.status !== "running";
     const running = this.conversation?.status === "running";
     this.updateResponseStatus();
     if (running !== this.previousRunning) {
@@ -445,19 +448,19 @@ export class MobileChatView extends ItemView {
     this.input.disabled = this.sending;
     this.input.placeholder = this.conversation?.archive
       ? "已归档，点助手名开始新聊天"
-      : "向" + (this.agent?.name ?? "助手") + "发送消息";
+      : "问问" + (this.agent?.name ?? "助手") + "…";
     if (this.homeDock)
       this.homeDock.hidden = !this.plugin.client.description || !this.homeMode;
     if (this.homeInput && this.homeSend) {
       const agent = this.composerAgent();
       const homePlaceholder = agent
-        ? "给" + agent.name + "发送消息"
+        ? "问问" + agent.name + "…"
         : "连接电脑后即可发送";
       if (this.homeInput.placeholder !== homePlaceholder)
         this.homeInput.placeholder = homePlaceholder;
-      this.homeInput.disabled = !client.connected || this.sending;
+      this.homeInput.disabled = this.submittingFromHome;
       this.homeSend.disabled =
-        !client.connected || this.sending || !agent || !this.homeInput.value.trim();
+        !client.connected || this.sending || this.submittingFromHome || !agent || !this.homeInput.value.trim();
       this.homeSend.setAttribute(
         "aria-label",
         agent ? "发送给" + agent.name : "发送",
@@ -627,7 +630,7 @@ export class MobileChatView extends ItemView {
       )
         return;
       await this.openConversation(item.id);
-      if (carry) {
+      if (carry && this.conversation?.id === item.id && !this.homeMode) {
         this.input.value = carry.text;
         this.attachment = carry.attachment;
         this.saveDraft();
@@ -900,6 +903,12 @@ export class MobileChatView extends ItemView {
       this.timeline
         .createEl("button", { text: "加载更早消息", cls: "pi-text-button" })
         .addEventListener("click", () => void this.loadOlder());
+    if (!c.messages.length && !this.incoming.length && !c.parent && !c.archive && c.status !== "running" && this.agent) {
+      const empty = this.timeline.createDiv({ cls: "pi-phone-chat-empty" });
+      renderAvatar(empty, this.app, this.agent);
+      empty.createEl("h3", { text: "和" + this.agent.name + "聊聊" });
+      if (this.agent.description) empty.createEl("p", { text: this.agent.description });
+    }
     if (offset + start === 0 && eventGroups.has(undefined))
       this.renderActivity(
         eventGroups.get(undefined)!,
@@ -941,7 +950,7 @@ export class MobileChatView extends ItemView {
           cls: "pi-message-bubble markdown-rendered",
           text: message.text,
         });
-      else
+      else {
         this.renderRichText(
           row,
           String(index + ((c as any).messageOffset ?? 0)),
@@ -950,6 +959,18 @@ export class MobileChatView extends ItemView {
           retained,
           message.at,
         );
+        if (message.text.trim()) {
+          const copy = iconButton(row, "copy", "复制回复", async () => {
+            try {
+              await navigator.clipboard.writeText(message.text);
+              new Notice("已复制回复");
+            } catch (error) {
+              new Notice("无法复制回复：" + errorText(error));
+            }
+          }, "pi-phone-copy");
+          copy.createSpan({ text: "复制", attr: { "aria-hidden": "true" } });
+        }
+      }
       if (message.role === "user" && message.localAttachmentName)
         row.createDiv({ cls: "pi-muted", text: "本地文件 · " + message.localAttachmentName });
       if (message.role === "user" && message.imageCount)
@@ -961,14 +982,6 @@ export class MobileChatView extends ItemView {
           this.delegation(record, retained);
     }
     for (const item of incoming) if (item.index === c.messages.length) this.delegation(item.record, retained, true);
-    if (!c.messages.length && !this.incoming.length)
-      this.timeline.createDiv({
-        cls: "pi-phone-welcome",
-        text:
-          "你好，我是" +
-          (this.agent?.name ?? "你的助手") +
-          "。想让电脑帮你处理什么？",
-      });
     if (c.status === "running") {
       const running = this.timeline.createDiv({
         cls: "pi-message pi-message-assistant",
@@ -1002,6 +1015,11 @@ export class MobileChatView extends ItemView {
         0,
         previousTop + this.timeline.scrollHeight - previousHeight,
       );
+    this.updateScrollButton();
+  }
+  private updateScrollButton() {
+    this.scrollButton.hidden = this.homeMode ||
+      this.timeline.scrollHeight - this.timeline.scrollTop - this.timeline.clientHeight <= 100;
   }
   private renderActivity(events: ToolEvent[], index: number | undefined, activeIndex: number) {
     const conversation = this.conversation!;
@@ -1247,6 +1265,7 @@ export class MobileChatView extends ItemView {
       if (text) view.stream(text);
     }
     if (changed && follow) this.timeline.scrollTop = this.timeline.scrollHeight;
+    if (changed) this.updateScrollButton();
     return pending;
   }
   private async runSlash(text: string) {
@@ -1464,10 +1483,11 @@ export class MobileChatView extends ItemView {
     if (!this.input) return;
     this.input.style.height = "auto";
     this.input.style.height =
-      Math.min(128, Math.max(36, this.input.scrollHeight)) + "px";
+      Math.min(120, Math.max(38, this.input.scrollHeight)) + "px";
   }
   private setScreen(home: boolean) {
     this.slashMenu?.close();
+    this.homeSlash?.close();
     if(home)for(const view of this.delegationViews.values())view.closeDetail(true);
     this.homeMode = home;
     this.updateResponseStatus();
@@ -1475,6 +1495,7 @@ export class MobileChatView extends ItemView {
     this.timeline.hidden = home;
     this.footer.hidden = home;
     this.contentEl.toggleClass("is-home", home);
+    this.updateScrollButton();
     this.renderHeader();
     this.controls();
   }
@@ -1496,7 +1517,11 @@ export class MobileChatView extends ItemView {
     const modal = Array.from(document.querySelectorAll<HTMLElement>(".modal-container"))
       .filter((el) => el.isConnected && !el.hidden).pop();
     if (modal) {
-      modal.querySelector<HTMLElement>(".modal-close-button")?.click();
+      modal.querySelector<HTMLElement>(".modal-close-button, .modal-header-button")?.click();
+      return;
+    }
+    if (this.settings) {
+      this.closeSettings();
       return;
     }
     const menu = document.querySelector<HTMLElement>(".menu");
@@ -1506,6 +1531,7 @@ export class MobileChatView extends ItemView {
     }
     if (this.contentEl.querySelector(".pi-slash-menu:not([hidden])")) {
       this.slashMenu?.close();
+      this.homeSlash?.close();
       return;
     }
     if (!this.homeMode) {
@@ -1569,42 +1595,19 @@ export class MobileChatView extends ItemView {
         a.name.localeCompare(b.name, "zh-CN"),
     );
     const pinned = this.pinnedAgents(agents);
-    if (!query) {
-      const hello = this.homeList.createDiv({ cls: "pi-phone-hello" });
-      hello.createEl("h2", { text: greeting() });
-      const sub = hello.createDiv({ cls: "pi-home-link" });
-      sub.createSpan({ cls: "pi-status-dot" });
-      sub.createSpan({ cls: "pi-phone-link-text", text: "电脑状态" });
-      const today = agents
-        .map((agent) => {
-          const summary = latest(agent.id);
-          if (!summary || !isSameDay(summary.updatedAt)) return;
-          const brief = describePreview(
-            summary.preview,
-            summary.status === "running",
-          );
-          if (!brief.structured || summary.status === "running") return;
-          return { agent, summary, brief };
-        })
-        .filter((item): item is NonNullable<typeof item> => Boolean(item))
-        .sort((a, b) =>
-          b.summary.updatedAt.localeCompare(a.summary.updatedAt),
-        )
-        .slice(0, 3);
-      if (today.length) this.renderToday(today);
-      if (pinned.length) this.renderPins(pinned, latest);
-    }
+    if (!query && pinned.length) this.renderPins(pinned, latest);
+    const featuredIds = new Set(query ? [] : pinned.map((agent) => agent.id));
     const rows = this.homeList.createDiv({
       cls: "pi-phone-recent",
       attr: { "aria-label": "助手聊天" },
     });
     const matches = agents.filter(
       (agent) =>
-        !query ||
+        !featuredIds.has(agent.id) && (!query ||
         [agent.name, agent.description, agent.scope, latest(agent.id)?.preview ?? ""]
           .join(" ")
           .toLocaleLowerCase()
-          .includes(query),
+          .includes(query)),
     );
     const recent = matches
       .filter((agent) => latest(agent.id))
@@ -1612,14 +1615,8 @@ export class MobileChatView extends ItemView {
         latest(b.id)!.updatedAt.localeCompare(latest(a.id)!.updatedAt),
       );
     const others = matches.filter((agent) => !latest(agent.id));
-    for (const [label, group] of [
-      ["最近", recent],
-      ["其他助手", others],
-    ] as const) {
-      if (!group.length) continue;
-      if (!query) rows.createDiv({ cls: "pi-phone-block-title", text: label });
-      for (const agent of group) this.renderContact(rows, agent, latest(agent.id), pinned);
-    }
+    for (const agent of [...recent, ...others])
+      this.renderContact(rows, agent, latest(agent.id), pinned);
     if (query && !matches.length)
       rows.createDiv({
         cls: "pi-phone-empty",
@@ -1628,19 +1625,22 @@ export class MobileChatView extends ItemView {
     if (!agents.length)
       rows.createDiv({
         cls: "pi-phone-empty",
-        text: "还没有助手，请先在电脑打开 Pi Agent。",
+        text: "还没有助手，请先在电脑打开 Obot。",
       });
     this.controls();
   }
-  private renderToday(
-    items: {
-      agent: AgentRecord;
-      summary: ConversationSummary;
-      brief: ReturnType<typeof describePreview>;
-    }[],
-  ) {
-    const block = this.homeList.createDiv({ cls: "pi-phone-block" });
-    block.createDiv({ cls: "pi-phone-block-title", text: "今日" });
+  private showToday() {
+    const dialog = new PhoneSheet(this.app, "今日结果");
+    const agents = (this.plugin.client.description?.agents ?? []) as AgentRecord[];
+    const latest = latestByAgent(this.summaries);
+    const items = agents.flatMap((agent) => {
+      const summary = latest.get(agent.id);
+      if (!summary || summary.status === "running" || !isSameDay(summary.updatedAt)) return [];
+      const brief = describePreview(summary.preview);
+      return brief.structured ? [{ agent, summary, brief }] : [];
+    }).sort((a, b) => b.summary.updatedAt.localeCompare(a.summary.updatedAt));
+    if (!items.length) dialog.contentEl.createEl("p", { text: "今天还没有可查看的结果。" });
+    const block = dialog.contentEl;
     const card = block.createDiv({ cls: "pi-today-card" });
     for (const item of items) {
       const button = card.createEl("button", {
@@ -1661,40 +1661,36 @@ export class MobileChatView extends ItemView {
       copy.createDiv({ cls: "pi-today-title", text: item.brief.title });
       if (item.brief.expense) this.renderExpenseMini(copy, item.brief.expense);
       else if (item.brief.file) this.renderFileChip(copy, item.brief.file);
-      button.addEventListener("click", () => void this.selectAgent(item.agent));
+      button.addEventListener("click", () => {
+        dialog.close();
+        void this.selectAgent(item.agent);
+      });
     }
+    dialog.open();
   }
   private renderPins(
     featured: AgentRecord[],
     latest: (id: string) => ConversationSummary | undefined,
   ) {
-    const block = this.homeList.createDiv({ cls: "pi-phone-block" });
-    block.createDiv({ cls: "pi-phone-block-title", text: "常用助手" });
-    const grid = block.createDiv({
-      cls: "pi-pin-grid",
-      attr: { "aria-label": "固定助手，长按调整" },
+    const grid = this.homeList.createDiv({
+      cls: "pi-phone-favorites",
+      attr: { "aria-label": "固定助手，长按调整", "data-count": String(featured.length) },
     });
-    for (const agent of featured) {
-      const summary = latest(agent.id);
-      const brief = summary
-        ? describePreview(summary.preview, summary.status === "running")
-        : undefined;
-      const status =
-        brief?.statusLine ||
-        shortStatus(
-          agent.description ||
-            (agent.scope ? "负责 " + agent.scope : "随时聊聊"),
-        );
+    for (const [index, agent] of featured.entries()) {
+      const running = latest(agent.id)?.status === "running";
       const button = grid.createEl("button", {
-        cls: "pi-pin-card",
+        cls: "pi-phone-favorite",
         attr: {
           type: "button",
-          "aria-label": "与" + agent.name + "聊天，长按调整固定。" + status,
+          "aria-label": "与" + agent.name + "聊天，长按调整固定" + (running ? "，正在处理" : ""),
         },
       });
-      renderAvatar(button, this.app, agent);
+      const avatar = button.createSpan({ cls: "pi-phone-pin-avatar" });
+      renderAvatar(avatar, this.app, agent);
+      if (index === 0)
+        setIcon(avatar.createSpan({ cls: "pi-phone-pin-star", attr: { "aria-hidden": "true" } }), "star");
+      avatar.classList.toggle("is-running", running);
       button.createSpan({ cls: "pi-pin-name", text: agent.name });
-      button.createSpan({ cls: "pi-pin-status", text: status });
       this.pinGesture(button, agent, featured);
       button.addEventListener("click", () => void this.selectAgent(agent));
     }
@@ -1708,11 +1704,10 @@ export class MobileChatView extends ItemView {
     const brief = summary
       ? describePreview(summary.preview, summary.status === "running")
       : undefined;
-    const preview = summary
-      ? summary.status === "running"
-        ? "正在处理…"
-        : brief?.preview || summary.preview
-      : agent.description ||
+    const running = summary?.status === "running";
+    const preview = running
+      ? "正在处理…"
+      : brief?.preview || agent.description ||
         (agent.scope ? "负责 " + agent.scope : "帮你处理笔记与日常任务");
     const button = parent.createEl("button", {
       cls: "pi-phone-contact",
@@ -1728,67 +1723,48 @@ export class MobileChatView extends ItemView {
         text: this.relativeTime(summary.updatedAt),
         attr: { datetime: summary.updatedAt },
       });
-    body.createDiv({ cls: "pi-phone-contact-preview", text: preview });
-    if (brief && summary?.status !== "running" && brief.chips.length) {
-      const chips = body.createDiv({ cls: "pi-chip-row" });
-      for (const chip of brief.chips) {
-        chips.createSpan({
-          cls: "pi-chip" + (chip.tone ? " is-" + chip.tone : ""),
-          text: chip.text,
-        });
-      }
+    const detail = body.createDiv({ cls: "pi-phone-contact-preview" });
+    if (running) {
+      detail.addClass("is-running");
+      detail.createSpan({ cls: "pi-phone-live-dot", attr: { "aria-hidden": "true" } });
     }
+    detail.createSpan({ text: preview });
     this.pinGesture(button, agent, pinned);
     button.addEventListener("click", () => void this.selectAgent(agent));
   }
   private composerAgent() {
     const agents = (this.plugin.client.description?.agents ?? []) as AgentRecord[];
-    const last = this.app.loadLocalStorage(this.plugin.localKey("selected-agent"));
-    return (
-      agents.find((agent) => agent.id === last) ||
-      this.pinnedAgents(agents)[0] ||
-      agents[0]
-    );
+    return this.pinnedAgents(agents)[0] ?? agents.find((agent) => agent.role === "manager") ?? agents[0];
   }
   private resizeHomeInput() {
     if (!this.homeInput) return;
     this.homeInput.style.height = "auto";
     this.homeInput.style.height =
-      Math.min(128, Math.max(36, this.homeInput.scrollHeight)) + "px";
+      Math.min(120, Math.max(38, this.homeInput.scrollHeight)) + "px";
   }
   private async sendFromHome() {
-    const text = this.homeInput?.value.trim() ?? "";
+    const text = this.homeInput.value.trim();
     const agent = this.composerAgent();
-    if (!text || !agent || this.sending || !this.plugin.client.connected) return;
-    this.homeInput.value = "";
-    this.resizeHomeInput();
+    if (!text || !agent || this.sending || this.submittingFromHome || !this.plugin.client.connected) return;
+    this.submittingFromHome = true;
+    this.homeSlash?.close();
     this.controls();
-    await this.selectAgent(agent);
-    if (!this.conversation || this.homeMode) {
-      if (this.homeMode && this.homeInput) this.homeInput.value = text;
-      else if (this.input) {
-        this.input.value = text;
-        this.resizeInput();
-        this.saveDraft();
-        this.controls();
-      }
-      return;
-    }
-    if (
-      this.conversation.archive ||
-      this.conversation.status === "running" ||
-      this.outbox()
-    ) {
-      this.input.value = text;
-      this.resizeInput();
+    try {
+      await this.selectAgent(agent);
+      const conversation = this.conversation;
+      if (this.closed || this.homeMode || !conversation || conversation.agentId !== agent.id) return;
+      const existingDraft = this.input.value.trim();
+      this.input.value = [this.input.value, text].filter(Boolean).join("\n");
       this.saveDraft();
+      this.homeInput.value = "";
+      this.resizeInput();
+      if (!existingDraft && !conversation.archive && conversation.status !== "running" && !this.outbox())
+        await this.sendOrStop();
+    } finally {
+      this.submittingFromHome = false;
+      this.resizeHomeInput();
       this.controls();
-      return;
     }
-    this.input.value = text;
-    this.resizeInput();
-    this.saveDraft();
-    await this.sendOrStop();
   }
   private pinnedAgents(agents: AgentRecord[]) {
     const stored = this.app.loadLocalStorage(
@@ -1806,7 +1782,7 @@ export class MobileChatView extends ItemView {
               Number(b.role === "manager") - Number(a.role === "manager") ||
               a.name.localeCompare(b.name, "zh-CN"),
           )
-          .slice(0, 3)
+          .slice(0, 1)
           .map((a) => a.id);
     return ids
       .map((id) => agents.find((a) => a.id === id))
@@ -1821,43 +1797,20 @@ export class MobileChatView extends ItemView {
       new Notice("固定助手未保存：" + errorText(error));
     }
   }
-  private pinMenu(
-    agent: AgentRecord,
-    featured: AgentRecord[],
-    event: MouseEvent,
-  ) {
-    const menu = new Menu();
-    const ids = featured.map((a) => a.id);
-    if (ids.includes(agent.id))
-      menu.addItem((item) =>
-        item
-          .setTitle("取消固定到顶部")
-          .setIcon("pin-off")
-          .onClick(() => this.savePins(ids.filter((id) => id !== agent.id))),
-      );
-    else if (ids.length < 3)
-      menu.addItem((item) =>
-        item
-          .setTitle("固定到顶部")
-          .setIcon("pin")
-          .onClick(() => this.savePins([...ids, agent.id])),
-      );
-    else {
-      menu.addItem((item) =>
-        item.setTitle("替换一位顶部助手").setDisabled(true),
-      );
-      featured.forEach((current, index) =>
-        menu.addItem((item) =>
-          item
-            .setTitle("替换「" + current.name + "」")
-            .setIcon("pin")
-            .onClick(() =>
-              this.savePins(ids.map((id, i) => (i === index ? agent.id : id))),
-            ),
-        ),
-      );
+  private pinMenu(agent: AgentRecord, featured: AgentRecord[]) {
+    const sheet = new PhoneSheet(this.app, agent.name);
+    const ids = featured.map((item) => item.id);
+    if (ids.includes(agent.id)) {
+      sheet.action("pin-off", "取消固定到顶部", () => this.savePins(ids.filter((id) => id !== agent.id)));
+    } else if (ids.length < 3) {
+      sheet.action("pin", "固定到顶部", () => this.savePins([...ids, agent.id]));
+    } else {
+      featured.forEach((current, index) => {
+        sheet.action("pin", "替换「" + current.name + "」", () =>
+          this.savePins(ids.map((id, i) => i === index ? agent.id : id)));
+      });
     }
-    menu.showAtMouseEvent(event);
+    sheet.open();
   }
   private pinGesture(
     button: HTMLButtonElement,
@@ -1872,15 +1825,15 @@ export class MobileChatView extends ItemView {
       if (timer) clearTimeout(timer);
       timer = undefined;
     };
-    const open = (event: MouseEvent) => {
+    const open = () => {
       cancel();
       suppressClick = true;
       if (button.isConnected && !this.closed)
-        this.pinMenu(agent, featured, event);
+        this.pinMenu(agent, featured);
     };
     button.addEventListener("contextmenu", (event) => {
       event.preventDefault();
-      if (!suppressClick) open(event);
+      if (!suppressClick) open();
     });
     button.addEventListener("pointerdown", (event) => {
       cancel();
@@ -1888,7 +1841,7 @@ export class MobileChatView extends ItemView {
       if (event.pointerType === "mouse" || event.button !== 0) return;
       x = event.clientX;
       y = event.clientY;
-      timer = setTimeout(() => open(event), 500);
+      timer = setTimeout(open, 500);
     });
     button.addEventListener("pointermove", (event) => {
       if (Math.hypot(event.clientX - x, event.clientY - y) > 10) cancel();
@@ -1923,54 +1876,53 @@ export class MobileChatView extends ItemView {
       day: "numeric",
     });
   }
-  private chatMenu(event: MouseEvent) {
-    new Menu()
-      .addItem((item) =>
-        item
-          .setTitle("新聊天")
-          .setIcon("square-pen")
-          .onClick(() => void this.newConversation()),
-      )
-      .addItem((item) =>
-        item
-          .setTitle("聊天历史与归档")
-          .setIcon("history")
-          .onClick(() => this.history()),
-      )
-      .addItem((item) =>
-        item
-          .setTitle("助手资料")
-          .setIcon("contact-round")
-          .onClick(() => this.profile()),
-      )
-      .addItem((item) =>
-        item
-          .setTitle("设置与电脑连接")
-          .setIcon("settings")
-          .onClick(() => this.plugin.openSettings()),
-      )
-      .showAtMouseEvent(event);
+  private chatMenu() {
+    const sheet = new PhoneSheet(this.app, this.agent?.name ?? "聊天操作");
+    sheet.action("square-pen", "新聊天", () => void this.newConversation());
+    sheet.action("history", "聊天历史与归档", () => this.history());
+    sheet.action("contact-round", "助手资料", () => this.profile());
+    sheet.action("paperclip", "添加本地文件", () => this.fileInput.click());
+    sheet.action("settings", "设置与电脑连接", () => this.openSettings());
+    sheet.open();
   }
-  private homeMenu(event: MouseEvent) {
-    new Menu()
-      .addItem((item) =>
-        item
-          .setTitle("设置与电脑连接")
-          .setIcon("settings")
-          .onClick(() => this.plugin.openSettings()),
-      )
-      .addItem((item) =>
-        item
-          .setTitle("返回 Obsidian 笔记")
-          .setIcon("notebook")
-          .onClick(() => void this.plugin.leaveChat()),
-      )
-      .showAtMouseEvent(event);
+  private homeMenu() {
+    const sheet = new PhoneSheet(this.app, "Obot");
+    sheet.action("settings", "设置与电脑连接", () => this.openSettings());
+    sheet.action("search", "搜索助手或聊天", () => {
+      this.homeSearch.parentElement!.hidden = false;
+      this.homeSearch.focus();
+    });
+    sheet.action("calendar-days", "今日结果", () => this.showToday());
+    sheet.action("paperclip", "添加本地文件", () => this.fileInput.click());
+    sheet.open();
+  }
+  private openSettings() {
+    if (this.settings) return;
+    this.settingsTrigger = this.header.querySelector<HTMLElement>(
+      this.homeMode ? ".pi-phone-account" : ".pi-phone-identity",
+    ) ?? undefined;
+    this.settings = this.contentEl.createDiv({ cls: "pi-phone-settings-screen" });
+    const header = this.settings.createDiv({ cls: "pi-phone-settings-header" });
+    iconButton(header, "chevron-left", "返回", () => this.closeSettings(), "pi-phone-round");
+    const page = this.settings.createDiv();
+    this.disposeSettings = renderPhoneSettings(page, this.plugin, () => {
+      this.closeSettings();
+      void this.showHome();
+    });
+    this.contentEl.addClass("is-settings");
+    header.querySelector("button")?.focus();
+  }
+  private closeSettings() {
+    this.disposeSettings?.();
+    this.disposeSettings = undefined;
+    this.settings?.remove();
+    this.settings = undefined;
+    this.contentEl.removeClass("is-settings");
+    this.settingsTrigger?.focus();
+    this.settingsTrigger = undefined;
   }
   private connectionInfo() {
-    const modal = new Modal(this.app);
-    modal.modalEl.addClass("pi-phone-modal");
-    modal.titleEl.setText("我的电脑");
+    const modal = new PhoneSheet(this.app, "我的电脑");
     modal.contentEl.createEl("p", {
       text: this.plugin.client.description?.vaultName ?? "尚未连接",
     });
@@ -1985,16 +1937,17 @@ export class MobileChatView extends ItemView {
     const button = modal.contentEl.createEl("button", { text: "连接设置" });
     button.addEventListener("click", () => {
       modal.close();
-      this.plugin.openSettings();
+      this.openSettings();
     });
     modal.open();
   }
   private startChat() {
-    const modal = new Modal(this.app);
-    modal.titleEl.setText("与谁开始新聊天？");
-    modal.modalEl.addClass("pi-phone-modal", "pi-phone-picker");
+    const modal = new PhoneSheet(this.app, "开始新聊天");
+    modal.modalEl.addClass("pi-phone-picker");
     modal.contentEl.addClass("pi-phone-contacts");
-    const search = modal.contentEl.createEl("input", {
+    const searchWrap = modal.contentEl.createDiv({ cls: "pi-phone-picker-search" });
+    setIcon(searchWrap.createSpan(), "search");
+    const search = searchWrap.createEl("input", {
       type: "search",
       attr: { placeholder: "搜索助手", "aria-label": "搜索助手" },
     });
@@ -2038,11 +1991,11 @@ export class MobileChatView extends ItemView {
   private profile() {
     if (!this.agent) return;
     const agent = this.agent as any;
-    const modal = new Modal(this.app);
-    modal.modalEl.addClass("pi-phone-modal");
-    modal.titleEl.setText(agent.name);
+    const modal = new PhoneSheet(this.app, "助手资料");
+    modal.contentEl.addClass("pi-phone-profile");
     renderAvatar(modal.contentEl, this.app, agent);
-    modal.contentEl.createEl("p", { text: agent.description });
+    modal.contentEl.createEl("h3", { text: agent.name });
+    modal.contentEl.createEl("p", { text: agent.description, cls: "pi-phone-profile-description" });
     modal.contentEl.createEl("p", {
       text:
         "负责目录：" +
@@ -2094,8 +2047,7 @@ export class MobileChatView extends ItemView {
       await this.selectAgent(agent);
       return;
     }
-    const modal = new Modal(this.app);
-    modal.titleEl.setText("电脑笔记 · 只读");
+    const modal = new PhoneSheet(this.app, "电脑笔记 · 只读");
     const body = modal.contentEl.createDiv({
       cls: "markdown-rendered pi-phone-note",
     });
@@ -2140,7 +2092,7 @@ export class MobileChatView extends ItemView {
   }
 }
 
-class PhoneHistory extends Modal {
+class PhoneHistory extends PhoneSheet {
   private archived = false;
   private list: ConversationSummary[] = [];
   private limit = 100;
@@ -2150,11 +2102,9 @@ class PhoneHistory extends Modal {
     private view: MobileChatView,
     private agent: AgentRecord,
   ) {
-    super(view.app);
+    super(view.app, "聊天历史");
   }
   onOpen() {
-    this.modalEl.addClass("pi-phone-modal");
-    this.titleEl.setText("聊天历史");
     void this.refresh();
   }
   onClose() {
