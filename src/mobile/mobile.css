@@ -271,7 +271,27 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
   min-height: 0;
   overflow: auto;
   padding: var(--pi-phone-top-space, 66px) 22px 20px;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
+}
+.pi-phone-home-contacts {
+  transition: transform 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+.pi-phone-home-list[data-edge-pull] > .pi-phone-home-contacts {
+  transform: translateY(var(--pi-phone-edge-pull));
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pi-phone-home-contacts,
+  .pi-phone-home-list[data-edge-pull] > .pi-phone-home-contacts {
+    transform: none;
+    transition: none;
+  }
+  .pi-phone-home-list[data-edge-pull="top"] {
+    box-shadow: inset 0 2px 0 var(--pi-line);
+  }
+  .pi-phone-home-list[data-edge-pull="bottom"] {
+    box-shadow: inset 0 -2px 0 var(--pi-line);
+  }
 }
 .pi-phone-connection:not([hidden]) ~ :is(.pi-phone-home, .pi-phone-messages) {
   --pi-phone-top-space: 8px;

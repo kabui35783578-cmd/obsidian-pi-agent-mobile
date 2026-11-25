@@ -26,6 +26,7 @@ import { MarkdownCache } from "../plugin/markdown-cache.ts";
 import { ConversationCache } from "./conversation-cache.ts";
 import { DelegationFlow } from "../plugin/delegation-flow.ts";
 import { readPhoneFile } from "./local-file.ts";
+import { installContactEdgeFeedback } from "./contact-edge-feedback.ts";
 import { SlashMenu } from "../plugin/slash-menu.ts";
 import { handleSlashUI } from "../plugin/command-ui.ts";
 import { CommandDraft } from "../plugin/command-draft.ts";
@@ -126,6 +127,8 @@ export class MobileChatView extends ItemView {
   private error = "";
   private home!: HTMLElement;
   private homeList!: HTMLElement;
+  private homeContacts!: HTMLElement;
+  private resetContactFeedback?: () => void;
   private homeSearch!: HTMLInputElement;
   private settingsTrigger?: HTMLElement;
   private homeDock!: HTMLElement;
@@ -197,6 +200,8 @@ export class MobileChatView extends ItemView {
     });
     this.homeSearch.addEventListener("input", () => this.renderHome());
     this.homeList = this.home.createDiv({ cls: "pi-phone-home-list" });
+    this.homeContacts = this.homeList.createDiv({ cls: "pi-phone-home-contacts" });
+    this.resetContactFeedback = installContactEdgeFeedback(this.homeList, this.homeContacts);
     this.homeDock = this.home.createDiv({ cls: "pi-phone-home-dock" });
     iconButton(
       this.homeDock,
@@ -334,6 +339,8 @@ export class MobileChatView extends ItemView {
   }
   private welcome() {
     this.setScreen(true);
+    this.resetContactFeedback?.();
+    this.homeContacts.empty();
     this.homeList.empty();
     this.timeline.empty();
     this.homeSearch.value = "";
@@ -1626,6 +1633,7 @@ export class MobileChatView extends ItemView {
     this.homeSlash?.close();
     if(home)for(const view of this.delegationViews.values())view.closeDetail(true);
     this.homeMode = home;
+    if (!home) this.resetContactFeedback?.();
     this.updateResponseStatus();
     this.home.hidden = !home;
     this.timeline.hidden = home;
@@ -1715,7 +1723,11 @@ export class MobileChatView extends ItemView {
   }
   private renderHome() {
     if (!this.homeList) return;
-    this.homeList.empty();
+    if (this.homeContacts.parentElement !== this.homeList) {
+      this.homeList.empty();
+      this.homeList.append(this.homeContacts);
+    }
+    this.homeContacts.empty();
     const query = this.homeSearch.value.trim().toLocaleLowerCase();
     const latestMap = latestByAgent(this.summaries);
     const latest = (id: string) => latestMap.get(id);
@@ -1733,7 +1745,7 @@ export class MobileChatView extends ItemView {
     const pinned = this.pinnedAgents(agents);
     if (!query && pinned.length) this.renderPins(pinned, latest);
     const featuredIds = new Set(query ? [] : pinned.map((agent) => agent.id));
-    const rows = this.homeList.createDiv({
+    const rows = this.homeContacts.createDiv({
       cls: "pi-phone-recent",
       attr: { "aria-label": "助手聊天" },
     });
@@ -1808,7 +1820,7 @@ export class MobileChatView extends ItemView {
     featured: AgentRecord[],
     latest: (id: string) => ConversationSummary | undefined,
   ) {
-    const grid = this.homeList.createDiv({
+    const grid = this.homeContacts.createDiv({
       cls: "pi-phone-favorites",
       attr: { "aria-label": "固定助手，长按调整", "data-count": String(featured.length) },
     });
