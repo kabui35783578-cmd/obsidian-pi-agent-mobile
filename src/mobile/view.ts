@@ -33,6 +33,7 @@ import { CommandDraft } from "../plugin/command-draft.ts";
 import { parseSlash } from "../shared/slash-commands.ts";
 import { errorText } from "../shared/types.ts";
 import { renderAssistantModel } from "./assistant-model.ts";
+import { PhoneToday } from "./today-view.ts";
 import type { AgentPermissions } from "../shared/permissions.ts";
 import type {
   AgentRecord,
@@ -43,12 +44,9 @@ import type {
 } from "../shared/types.ts";
 import {
   describePreview,
-  fileChipLabel,
-  isSameDay,
   presentMessage,
   type Artifact,
   type ExpenseArtifact,
-  type FileArtifact,
 } from "./artifacts.ts";
 
 export const MOBILE_VIEW = "pi-agent-mobile-chat";
@@ -146,6 +144,7 @@ export class MobileChatView extends ItemView {
   private homeRevision = 0;
   private markdownCache: MarkdownCache;
   private avatars: PhoneAvatars;
+  private today?: PhoneToday;
   private previousRunning?: boolean;
   private shownAttachment?: string;
   constructor(
@@ -178,6 +177,14 @@ export class MobileChatView extends ItemView {
     const el = this.contentEl;
     el.empty();
     el.addClass("pi-agent-view", "pi-phone-view");
+    this.today = new PhoneToday(el, this.app, this.plugin.client, (id) => {
+      this.today?.close(false);
+      void this.openConversation(id);
+    }, (path, agentId) => void this.readNote(path, agentId), (parent) => {
+      const manager = (this.plugin.client.description?.agents as AgentRecord[] | undefined)
+        ?.find((agent) => agent.role === "manager");
+      if (manager) this.avatars.render(parent, manager);
+    });
     this.header = el.createDiv({ cls: "pi-chat-header pi-phone-header" });
     this.statusEl = el.createDiv({
       cls: "pi-phone-connection",
@@ -321,6 +328,8 @@ export class MobileChatView extends ItemView {
     else this.welcome();
   }
   async onClose() {
+    this.today?.dispose();
+    this.today = undefined;
     this.slashMenu?.close();
     this.homeSlash?.close();
     this.closeSettings();
@@ -338,6 +347,7 @@ export class MobileChatView extends ItemView {
     this.messagesComponent?.unload();
   }
   private welcome() {
+    this.today?.close(false);
     this.setScreen(true);
     this.resetContactFeedback?.();
     this.homeContacts.empty();
@@ -781,7 +791,9 @@ export class MobileChatView extends ItemView {
   }
   private onEvent(event: any) {
     if (this.closed) return;
+    if (event.type === "tool.event" && this.today?.isOpen) this.today.refresh();
     if (event.type === "connection") {
+      this.today?.refresh();
       if (this.plugin.client.connected) this.refreshAvatars();
       this.controls();
       if (
@@ -1271,12 +1283,6 @@ export class MobileChatView extends ItemView {
       total.createSpan({ cls: "pi-ledger-amt", text: expense.total });
     }
   }
-  private renderFileChip(parent: HTMLElement, file: FileArtifact) {
-    const chip = parent.createDiv({ cls: "pi-file-chip" });
-    const icon = chip.createSpan({ cls: "pi-file-chip-icon", attr: { "aria-hidden": "true" } });
-    setIcon(icon, "file");
-    chip.createSpan({ text: fileChipLabel(file.path) });
-  }
   private expenseWhen(expense: ExpenseArtifact, at?: string) {
     const date = at ? new Date(at) : undefined;
     const day = date && !Number.isNaN(date.getTime()) ? this.dayLabel(date) : "";
@@ -1633,7 +1639,10 @@ export class MobileChatView extends ItemView {
     this.homeSlash?.close();
     if(home)for(const view of this.delegationViews.values())view.closeDetail(true);
     this.homeMode = home;
-    if (!home) this.resetContactFeedback?.();
+    if (!home) {
+      this.resetContactFeedback?.();
+      this.today?.close(false);
+    }
     this.updateResponseStatus();
     this.home.hidden = !home;
     this.timeline.hidden = home;
@@ -1668,6 +1677,7 @@ export class MobileChatView extends ItemView {
       this.closeSettings();
       return;
     }
+    if (this.today?.navigateBack()) return;
     const menu = document.querySelector<HTMLElement>(".menu");
     if (menu) {
       menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -1689,6 +1699,7 @@ export class MobileChatView extends ItemView {
     }
   }
   private async refreshHome() {
+    this.today?.refresh();
     const revision = ++this.homeRevision;
     try {
       const list =
@@ -1744,6 +1755,7 @@ export class MobileChatView extends ItemView {
     );
     const pinned = this.pinnedAgents(agents);
     if (!query && pinned.length) this.renderPins(pinned, latest);
+    if (!query) this.today?.entry(this.homeContacts);
     const featuredIds = new Set(query ? [] : pinned.map((agent) => agent.id));
     const rows = this.homeContacts.createDiv({
       cls: "pi-phone-recent",
@@ -1776,45 +1788,6 @@ export class MobileChatView extends ItemView {
         text: "还没有助手，请先在电脑打开 Obot。",
       });
     this.controls();
-  }
-  private showToday() {
-    const dialog = new PhoneSheet(this.app, "今日结果");
-    const agents = (this.plugin.client.description?.agents ?? []) as AgentRecord[];
-    const latest = latestByAgent(this.summaries);
-    const items = agents.flatMap((agent) => {
-      const summary = latest.get(agent.id);
-      if (!summary || summary.status === "running" || !isSameDay(summary.updatedAt)) return [];
-      const brief = describePreview(summary.preview);
-      return brief.structured ? [{ agent, summary, brief }] : [];
-    }).sort((a, b) => b.summary.updatedAt.localeCompare(a.summary.updatedAt));
-    if (!items.length) dialog.contentEl.createEl("p", { text: "今天还没有可查看的结果。" });
-    const block = dialog.contentEl;
-    const card = block.createDiv({ cls: "pi-today-card" });
-    for (const item of items) {
-      const button = card.createEl("button", {
-        cls: "pi-today-item",
-        attr: {
-          type: "button",
-          "aria-label": item.agent.name + "，" + item.brief.title,
-        },
-      });
-      this.avatars.render(button, item.agent);
-      const copy = button.createDiv({ cls: "pi-today-copy" });
-      const kicker = copy.createDiv({ cls: "pi-today-kicker" });
-      kicker.createEl("strong", { text: item.agent.name });
-      kicker.createEl("time", {
-        text: this.relativeTime(item.summary.updatedAt),
-        attr: { datetime: item.summary.updatedAt },
-      });
-      copy.createDiv({ cls: "pi-today-title", text: item.brief.title });
-      if (item.brief.expense) this.renderExpenseMini(copy, item.brief.expense);
-      else if (item.brief.file) this.renderFileChip(copy, item.brief.file);
-      button.addEventListener("click", () => {
-        dialog.close();
-        void this.selectAgent(item.agent);
-      });
-    }
-    dialog.open();
   }
   private renderPins(
     featured: AgentRecord[],
@@ -2039,7 +2012,6 @@ export class MobileChatView extends ItemView {
       this.homeSearch.parentElement!.hidden = false;
       this.homeSearch.focus();
     });
-    sheet.action("calendar-days", "今日结果", () => this.showToday());
     sheet.action("paperclip", "添加本地文件", () => this.homeFileInput.click());
     sheet.open();
   }
@@ -2199,8 +2171,8 @@ export class MobileChatView extends ItemView {
   private history() {
     if (this.agent) new PhoneHistory(this, this.agent).open();
   }
-  async readNote(path: string) {
-    const agent = this.plugin.client.description?.agents.find(
+  async readNote(path: string, resultAgentId?: string) {
+    const agent = resultAgentId ? undefined : this.plugin.client.description?.agents.find(
       (a: AgentRecord) => a.path === path,
     );
     if (agent) {
@@ -2226,6 +2198,7 @@ export class MobileChatView extends ItemView {
           event.stopImmediatePropagation();
           void this.readNote(
             target.dataset.href || target.getAttribute("href") || "",
+            resultAgentId,
           );
         }
       },
@@ -2235,7 +2208,7 @@ export class MobileChatView extends ItemView {
     try {
       const value = await this.plugin.client.call("note.read", {
         path,
-        agentId: this.agent?.id,
+        agentId: resultAgentId ?? this.agent?.id,
       });
       body.empty();
       modal.titleEl.setText("电脑笔记 · " + value.path);
