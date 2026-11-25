@@ -1174,6 +1174,50 @@ button.pi-today-item + button.pi-today-item {
 .pi-phone-modal .setting-item-control {
   flex-wrap: wrap;
 }
+
+.pi-phone-model-setting {
+  display: grid;
+  gap: 8px;
+  margin-block: 16px;
+  padding-block: 14px;
+  border-block: 1px solid var(--background-modifier-border);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.pi-phone-model-setting label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+}
+.pi-phone-model-setting select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font-size: 16px;
+  font-weight: normal;
+  text-overflow: ellipsis;
+}
+.pi-phone-modal .pi-phone-model-setting p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.pi-phone-model-actions,
+.pi-phone-model-chat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pi-phone-model-actions[hidden] { display: none; }
+.pi-phone-modal .pi-phone-model-setting button {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+}
+.pi-phone-modal .pi-phone-model-setting button:disabled { opacity: 0.55; }
 .pi-phone-modal .pi-history-row {
   gap: 8px;
 }

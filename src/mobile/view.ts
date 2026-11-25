@@ -31,6 +31,8 @@ import { handleSlashUI } from "../plugin/command-ui.ts";
 import { CommandDraft } from "../plugin/command-draft.ts";
 import { parseSlash } from "../shared/slash-commands.ts";
 import { errorText } from "../shared/types.ts";
+import { renderAssistantModel } from "./assistant-model.ts";
+import type { AgentPermissions } from "../shared/permissions.ts";
 import type {
   AgentRecord,
   Conversation,
@@ -2123,19 +2125,15 @@ export class MobileChatView extends ItemView {
   }
   private profile() {
     if (!this.agent) return;
-    const agent = this.agent as any;
+    const agent = this.agent as AgentRecord & { permissions?: AgentPermissions };
+    const conversation = this.conversation;
     const modal = new PhoneSheet(this.app, "助手资料");
     modal.contentEl.addClass("pi-phone-profile");
     this.avatars.render(modal.contentEl, agent);
     modal.contentEl.createEl("h3", { text: agent.name });
     modal.contentEl.createEl("p", { text: agent.description, cls: "pi-phone-profile-description" });
-    modal.contentEl.createEl("p", {
-      text:
-        "负责目录：" +
-        (agent.scope || "总管") +
-        " · 模型：" +
-        (agent.model || this.plugin.client.description.model || "未选择"),
-    });
+    modal.contentEl.createEl("p", { text: "负责目录：" + (agent.scope || "总管") });
+    const modelSection = modal.contentEl.createDiv({ cls: "pi-phone-model-setting" });
     modal.contentEl.createEl("p", {
       text:
         "Skills：" +
@@ -2168,6 +2166,23 @@ export class MobileChatView extends ItemView {
       text: "以上能力在电脑执行，权限与连接配置请在电脑管理。",
     });
     modal.open();
+    renderAssistantModel(
+      modelSection, this.plugin.client, agent,
+      conversation && !conversation.archive && conversation.agentId === agent.id
+        ? {
+            separateModel: Boolean(conversation.modelOverride && conversation.modelOverride !== "inherit"),
+            openPicker: () => {
+              if (this.closed || this.conversation?.id !== conversation.id) return;
+              if (this.conversation.status === "running" || this.sending) {
+                new Notice("请等当前消息处理完，再更改这条聊天的模型");
+                return;
+              }
+              modal.close();
+              void this.runSlash("/model");
+            },
+          }
+        : undefined,
+    );
   }
   private history() {
     if (this.agent) new PhoneHistory(this, this.agent).open();
