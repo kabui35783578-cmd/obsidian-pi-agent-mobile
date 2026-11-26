@@ -23,7 +23,7 @@ import { PhoneAvatars } from "./avatar-sync.ts";
 import { remoteId } from "../shared/mobile-wire.ts";
 import { latestByAgent, toolSteps } from "../shared/conversation-ui.ts";
 import { MarkdownCache } from "../plugin/markdown-cache.ts";
-import { ConversationCache } from "./conversation-cache.ts";
+import { ConversationCache, sameConversationData } from "./conversation-cache.ts";
 import { DelegationFlow } from "../plugin/delegation-flow.ts";
 import { readPhoneFile } from "./local-file.ts";
 import { installContactEdgeFeedback } from "./contact-edge-feedback.ts";
@@ -111,6 +111,9 @@ export class MobileChatView extends ItemView {
   private sending = false;
   private limit = 60;
   private refreshTimer?: ReturnType<typeof setTimeout>;
+  private draftTimer?: ReturnType<typeof setTimeout>;
+  private messagesDirty = false;
+  private pendingSendRow?: HTMLElement;
   private streamTimer?: ReturnType<typeof setTimeout>;
   private streams = new Map<string, { text: string; seq: number; finished?: boolean }>();
   private streamNodes = new Map<string, Text>();
@@ -120,7 +123,6 @@ export class MobileChatView extends ItemView {
   private incoming: DelegationRecord[] = [];
   private incomingAgentId?: string;
   private incomingRevision = 0;
-  private messagesComponent?: Component;
   private describing?: Promise<void>;
   private error = "";
   private home!: HTMLElement;
@@ -142,6 +144,7 @@ export class MobileChatView extends ItemView {
     this.plugin.client.call<Conversation>("conversation.get", { id, limit: 60 }),
   );
   private homeRevision = 0;
+  private homeRefreshTimer?: ReturnType<typeof setTimeout>;
   private markdownCache: MarkdownCache;
   private avatars: PhoneAvatars;
   private today?: PhoneToday;
@@ -299,10 +302,17 @@ export class MobileChatView extends ItemView {
         "aria-label": "聊天消息",
       },
     });
+    const persistDraft = () => {
+      try { this.saveDraft(); } catch (error) { this.fail(error); }
+    };
     this.input.addEventListener("input", () => {
-      this.saveDraft();
+      clearTimeout(this.draftTimer);
+      this.draftTimer = setTimeout(persistDraft, 180);
       this.resizeInput();
       this.controls();
+    });
+    this.registerDomEvent(el.ownerDocument, "visibilitychange", () => {
+      if (el.ownerDocument.hidden && this.draftTimer) persistDraft();
     });
     if (this.slashMenu) this.removeChild(this.slashMenu);
     this.slashMenu = this.addChild(
@@ -328,13 +338,13 @@ export class MobileChatView extends ItemView {
     else this.welcome();
   }
   async onClose() {
+    this.closed = true;
     this.today?.dispose();
     this.today = undefined;
     this.slashMenu?.close();
     this.homeSlash?.close();
     this.closeSettings();
     this.markdownCache.clear();
-    this.closed = true;
     this.generation++;
     this.homeRevision++;
     this.prefetchRevision++;
@@ -344,7 +354,8 @@ export class MobileChatView extends ItemView {
     this.unsubscribe?.();
     clearTimeout(this.refreshTimer);
     clearTimeout(this.streamTimer);
-    this.messagesComponent?.unload();
+    clearTimeout(this.homeRefreshTimer);
+    this.refreshTimer = this.streamTimer = this.homeRefreshTimer = undefined;
   }
   private welcome() {
     this.today?.close(false);
@@ -453,7 +464,8 @@ export class MobileChatView extends ItemView {
     if (!this.statusEl) return;
     const client = this.plugin.client;
     const offline = !client.connected && Boolean(client.credential);
-    this.statusTitle.setText(offline ? "电脑连接已断开" : "操作未完成");
+    const title = offline ? "电脑连接已断开" : "操作未完成";
+    if (this.statusTitle.textContent !== title) this.statusTitle.setText(title);
     const status = this.error || client.status;
     if (this.statusText.textContent !== status) this.statusText.setText(status);
     this.statusText.hidden = status === this.statusTitle.textContent;
@@ -525,6 +537,8 @@ export class MobileChatView extends ItemView {
     return this.plugin.localKey("draft:" + id);
   }
   private saveDraft() {
+    clearTimeout(this.draftTimer);
+    this.draftTimer = undefined;
     if (this.conversation && this.input) {
       if (this.imageAttachment) this.imageDrafts.set(this.conversation.id, this.imageAttachment);
       else this.imageDrafts.delete(this.conversation.id);
@@ -589,7 +603,6 @@ export class MobileChatView extends ItemView {
   private async selectAgent(agent: AgentRecord, fresh = false) {
     this.saveDraft();
     this.agent = agent;
-    this.setScreen(false);
     this.conversation = undefined;
     this.input.value = "";
     this.attachment = undefined;
@@ -598,8 +611,8 @@ export class MobileChatView extends ItemView {
     this.limit = 60;
     const generation = ++this.generation;
     this.app.saveLocalStorage(this.plugin.localKey("selected-agent"), agent.id);
-    this.renderHeader();
-    this.controls();
+    this.setScreen(false);
+    this.resizeInput();
     this.timeline.setText("正在读取电脑上的对话…");
     try {
       if (fresh) {
@@ -640,20 +653,18 @@ export class MobileChatView extends ItemView {
       this.agent = this.plugin.client.description.agents.find(
         (a: AgentRecord) => a.id === conversation.agentId,
       );
-      this.setScreen(false);
       this.app.saveLocalStorage(
         this.plugin.localKey("selected:" + conversation.agentId),
         id,
       );
       const draft = this.app.loadLocalStorage(this.draftKey(id));
       this.input.value = draft?.text ?? "";
-      this.resizeInput();
       this.attachment = draft?.attachment;
       this.error = "";
       this.limit = 60;
-      this.renderHeader();
+      this.setScreen(false);
+      this.resizeInput();
       this.renderMessages();
-      this.controls();
       void this.refreshIncoming(conversation.agentId,generation);
       if (cached) void this.refreshConversation();
     } catch (e) {
@@ -695,27 +706,36 @@ export class MobileChatView extends ItemView {
     const id = this.conversation?.id,
       generation = this.generation;
     if (!id || this.closed) return;
+    clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
+    const limit = this.limit;
     const stream = this.streams.get(id);
     const pending = this.pendingSends.get(id);
     const pendingFinished = pending?.finished;
     try {
       const value = await this.plugin.client.call<Conversation>(
         "conversation.get",
-        { id, limit: this.limit },
+        { id, limit },
       );
       if (
         revision !== this.refreshVersion ||
         this.closed ||
         generation !== this.generation ||
-        this.conversation?.id !== id
+        this.conversation?.id !== id ||
+        limit !== this.limit
       )
         return;
-      this.conversation = value;
-      if (this.limit <= 60) this.conversationCache.put(value);
-      if (stream?.finished && this.streams.get(id) === stream && value.status !== "running")
+      const changed = !sameConversationData(this.conversation, value);
+      if (changed) this.conversation = value;
+      if (limit <= 60) this.conversationCache.put(value);
+      let redraw = changed || this.messagesDirty;
+      if (stream?.finished && this.streams.get(id) === stream && value.status !== "running") {
         this.streams.delete(id);
+        redraw = true;
+      }
       if (pending && pendingFinished && this.pendingSends.get(id) === pending) {
         this.pendingSends.delete(id);
+        redraw ||= Boolean(this.pendingSendRow?.isConnected);
         if (pending.failed && !this.confirmedPendingSend(value, pending) && !this.input.value.trim()) {
           this.input.value = pending.operation.text;
           this.attachment = pending.operation.attachment;
@@ -724,10 +744,10 @@ export class MobileChatView extends ItemView {
           this.saveDraft();
         }
       }
-      this.renderMessages();
+      if (redraw) this.renderMessages();
       this.controls();
     } catch (e) {
-      this.fail(e);
+      if (revision === this.refreshVersion && generation === this.generation) this.fail(e);
     }
   }
   private queueRefresh() {
@@ -818,14 +838,15 @@ export class MobileChatView extends ItemView {
     } else if (event.type === "remote.reset") {
       this.conversationCache.clear();
       this.summariesLoaded = false;
+      this.homeRevision++;
+      this.prefetchRevision++;
       this.streams.clear();
       for (const stream of event.streams ?? [])
         this.streams.set(stream.conversationId, stream);
       const id = this.conversation?.id;
-      if (id && !this.homeMode && this.streams.get(id)?.text) {
-        this.ensureStreamNode(id);
-        this.flushStreams();
-        this.scheduleStream();
+      if (id && !this.homeMode) {
+        if (!this.settings && this.streams.get(id)?.text) this.ensureStreamNode(id);
+        if (this.flushStreams()) this.scheduleStream();
       }
       const pending = id && this.pendingSends.get(id);
       if (pending && !pending.finished)
@@ -848,6 +869,16 @@ export class MobileChatView extends ItemView {
           .finally(() => {
             this.describing = undefined;
           });
+    } else if (event.type === "chat.streamReset") {
+      const id = event.conversationId;
+      const before = this.streams.get(id);
+      if (before && event.remoteSequence <= before.seq) return;
+      this.streams.set(id, { text: "", seq: event.remoteSequence });
+      if (!this.homeMode && id === this.conversation?.id) {
+        this.flushStreams();
+        this.updateResponseStatus();
+        this.queueRefresh();
+      } else if (!this.homeMode) this.delegationViews.get(id)?.stream("");
     } else if (event.type === "chat.delta") {
       const before = this.streams.get(event.conversationId);
       if (before && event.remoteSequence <= before.seq) return;
@@ -856,12 +887,12 @@ export class MobileChatView extends ItemView {
         text: previousText + event.delta,
         seq: event.remoteSequence,
       });
-      if (!this.homeMode && event.conversationId === this.conversation?.id &&
+      if (!this.homeMode && !this.settings && event.conversationId === this.conversation?.id &&
           !previousText.trim() && event.delta.trim()) {
         this.ensureStreamNode(event.conversationId);
         this.flushStreams();
+        this.updateResponseStatus();
       }
-      if (event.conversationId === this.conversation?.id) this.updateResponseStatus();
       if (
         !this.homeMode &&
         (this.streamNodes.has(event.conversationId) || this.delegationViews.has(event.conversationId)) &&
@@ -875,10 +906,10 @@ export class MobileChatView extends ItemView {
       const stream = this.streams.get(event.id);
       if (stream && event.status !== "running") {
         if (event.id !== this.conversation?.id) this.streams.delete(event.id);
-        else this.streams.set(event.id, { ...stream, finished: true });
+        else if (!stream.finished) this.streams.set(event.id, { ...stream, finished: true });
       }
       if (event.id === this.conversation?.id) this.queueRefresh();
-      if (this.homeMode) void this.refreshHome();
+      if (this.homeMode) this.queueHomeRefresh();
     } else if (event.type === "delegation.updated") {
       if (
         this.conversation &&
@@ -890,6 +921,7 @@ export class MobileChatView extends ItemView {
         );
         if (index >= 0) records[index] = event;
         else records.push(event);
+        this.messagesDirty = true;
         this.queueRefresh();
       }
     } else if (
@@ -899,6 +931,7 @@ export class MobileChatView extends ItemView {
       const conversation = this.conversation!;
       const follow = this.timeline.scrollHeight - this.timeline.scrollTop - this.timeline.clientHeight < 100;
       conversation.events.push(event);
+      if (this.settings) { this.messagesDirty = true; return; }
       this.updateResponseStatus();
       const key = conversation.id + ":" + (event.messageIndex ?? "legacy");
       const view = this.activityViews.get(key);
@@ -910,7 +943,10 @@ export class MobileChatView extends ItemView {
         this.updateActivity(view, steps, index,
           ((conversation as any).messageOffset ?? 0) + conversation.messages.findLastIndex(message => message.role === "user"));
         if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
-      } else this.queueRefresh();
+      } else {
+        this.messagesDirty = true;
+        this.queueRefresh();
+      }
     } else if (
       event.type === "remote.operation"
     ) {
@@ -941,6 +977,8 @@ export class MobileChatView extends ItemView {
   private renderMessages() {
     const c = this.conversation;
     if (!c) return;
+    if (this.settings) { this.messagesDirty = true; return; }
+    this.messagesDirty = false;
     this.markdownCache.reset(c.id);
     const retained = new Set<string>();
     const follow =
@@ -975,10 +1013,8 @@ export class MobileChatView extends ItemView {
       else eventGroups.set(index, [event]);
     }
     const shownStream = this.streamNodes.get(c.id)?.data;
-    this.messagesComponent?.unload();
-    this.messagesComponent = new Component();
-    this.messagesComponent.load();
     this.timeline.empty();
+    this.pendingSendRow = undefined;
     this.streamNodes.clear();
     if (c.parent)
       this.timeline
@@ -996,7 +1032,7 @@ export class MobileChatView extends ItemView {
     }
     const pending = this.outbox();
     if (pending && !this.sending) {
-      const warning = this.timeline.createDiv({ cls: "pi-source-banner" });
+      const warning = this.timeline.createDiv({ cls: "pi-source-banner pi-phone-outbox-warning" });
       warning.createSpan({
         text: "上一条发送结果待确认；重试使用同一个任务编号，避免重复执行。",
       });
@@ -1021,6 +1057,13 @@ export class MobileChatView extends ItemView {
         activeIndex,
       );
     const incoming = !c.background && !c.execution ? receiptPositions(c.messages, this.incoming) : [];
+    const delegationsByIndex = new Map<number, DelegationRecord[]>();
+    for (const record of c.delegations ?? []) {
+      const index = delegationAnchor({ ...record, messageIndex: record.messageIndex - offset }, c.messages);
+      const records = delegationsByIndex.get(index);
+      if (records) records.push(record);
+      else delegationsByIndex.set(index, [record]);
+    }
     for (let index = start; index < c.messages.length; index++) {
       for (const item of incoming) if (item.index === index || (index === start && item.index < start)) this.delegation(item.record, retained, true);
       const message = c.messages[index];
@@ -1082,9 +1125,7 @@ export class MobileChatView extends ItemView {
         row.createDiv({ cls: "pi-muted", text: "图片 · " + message.imageCount + " 张" });
       if (events?.length)
         this.renderActivity(events, offset + index, activeIndex);
-      for (const record of c.delegations ?? [])
-        if (delegationAnchor({ ...record, messageIndex: record.messageIndex - offset }, c.messages) === index)
-          this.delegation(record, retained);
+      for (const record of delegationsByIndex.get(index) ?? []) this.delegation(record, retained);
     }
     for (const item of incoming) if (item.index === c.messages.length) this.delegation(item.record, retained, true);
     this.renderPendingSend();
@@ -1136,17 +1177,6 @@ export class MobileChatView extends ItemView {
       openFile: path => /\.(md|markdown|canvas|base)$/i.test(path) ? () => void this.readNote(path) : undefined,
     });
   }
-  private markdown(text: string, el: HTMLElement) {
-    // Intercept internal links above; don't render file embeds from the phone's
-    // unrelated local vault when displaying a remote computer conversation.
-    void MarkdownRenderer.render(
-      this.app,
-      safeMarkdown(text),
-      el,
-      "",
-      this.messagesComponent!,
-    ).catch(() => el.setText(text));
-  }
   private clearCollaboration() {
     for(const view of this.delegationViews.values())view.dispose();
     this.delegationViews.clear();this.activityViews.clear();this.incoming=[];this.incomingAgentId=undefined;this.incomingRevision++;
@@ -1162,7 +1192,7 @@ export class MobileChatView extends ItemView {
       const storedStart = this.app.loadLocalStorage(startKey);
       const startedAt = storedStart || conversation.messages[0]?.at || conversation.updatedAt;
       if (!storedStart) this.app.saveLocalStorage(startKey, startedAt);
-      this.incoming=list.filter(c=>c.source==="delegation"&&c.parent&&c.parent.agentId!==agentId&&!c.archive)
+      const incoming: DelegationRecord[] = list.filter(c=>c.source==="delegation"&&c.parent&&c.parent.agentId!==agentId&&!c.archive)
         .filter(c => {
           const key = this.plugin.localKey("collaboration-owner:" + c.id);
           const owner = this.app.loadLocalStorage(key);
@@ -1173,7 +1203,10 @@ export class MobileChatView extends ItemView {
         .slice(0,30).reverse().map(c=>({conversationId:c.id,parentConversationId:c.parent!.conversationId,messageIndex:c.parent!.messageIndex,
           fromAgentId:c.parent!.agentId,toAgentId:agentId,task:"",summary:c.title,messageCount:c.messageCount,
           status:c.status==="running"?"running":c.status==="failed"?"failed":c.status==="cancelled"?"cancelled":c.messageCount===0?"queued":"completed",updatedAt:this.app.loadLocalStorage(this.plugin.localKey("collaboration-owner:" + c.id))?.at ?? c.updatedAt}));
-      this.renderMessages();
+      if (!sameConversationData(this.incoming, incoming)) {
+        this.incoming = incoming;
+        this.renderMessages();
+      }
     } catch { /* Older desktop versions may not expose background records. */ }
   }
   private delegation(record: DelegationRecord, _retained: Set<string>, receiver=false) {
@@ -1312,7 +1345,7 @@ export class MobileChatView extends ItemView {
     );
   }
   private updateResponseStatus() {
-    if (!this.responseStatus) return;
+    if (!this.responseStatus || this.settings) return;
     const c = this.conversation;
     const visible = !this.homeMode && c?.status === "running" && !!this.agent;
     this.responseStatus.hidden = !visible;
@@ -1328,21 +1361,23 @@ export class MobileChatView extends ItemView {
     if (this.responseText.textContent !== label) this.responseText.setText(label);
   }
   private scheduleStream() {
-    if (this.streamTimer || this.closed) return;
+    if (this.streamTimer || this.closed || this.homeMode || this.settings) return;
     this.streamTimer = setTimeout(() => {
       this.streamTimer = undefined;
       if (this.flushStreams()) this.scheduleStream();
     }, 16);
   }
   private flushStreams() {
+    if (this.homeMode || this.settings) return false;
     const follow = this.timeline.scrollHeight - this.timeline.scrollTop - this.timeline.clientHeight < 100;
     let pending = false, changed = false;
     for (const [id, node] of this.streamNodes) {
-      const text = this.streams.get(id)?.text;
-      if (text === undefined || !node.isConnected) continue;
+      const text = this.streams.get(id)?.text ?? "";
+      if (!node.isConnected) continue;
       const frame = streamFrame(text, node.data);
       if (frame.value !== node.data) {
-        if (frame.value && node.parentElement?.parentElement) node.parentElement.parentElement.hidden = false;
+        const row = node.parentElement?.parentElement;
+        if (row) row.hidden = !frame.value;
         if (frame.value.startsWith(node.data)) node.appendData(frame.value.slice(node.length));
         else node.data = frame.value;
         changed = true;
@@ -1350,8 +1385,7 @@ export class MobileChatView extends ItemView {
       pending ||= frame.pending;
     }
     for (const [id, view] of this.delegationViews) {
-      const text = this.streams.get(id)?.text;
-      if (text) view.stream(text);
+      view.stream(this.streams.get(id)?.text ?? "");
     }
     if (changed && follow) this.timeline.scrollTop = this.timeline.scrollHeight;
     if (changed) this.updateScrollButton();
@@ -1383,6 +1417,8 @@ export class MobileChatView extends ItemView {
     );
   }
   private renderPendingSend(follow = false) {
+    this.pendingSendRow?.remove();
+    this.pendingSendRow = undefined;
     const c = this.conversation;
     if (!c) return;
     const pending = this.pendingSends.get(c.id);
@@ -1392,6 +1428,7 @@ export class MobileChatView extends ItemView {
       return;
     }
     const row = this.timeline.createDiv({ cls: "pi-message pi-message-user" });
+    this.pendingSendRow = row;
     row.createDiv({ cls: "pi-message-bubble markdown-rendered", text: pending.operation.text });
     const streamRow = this.streamNodes.get(c.id)?.parentElement?.parentElement;
     const status = this.timeline.querySelector(".pi-phone-result-status");
@@ -1587,6 +1624,8 @@ export class MobileChatView extends ItemView {
     }
   }
   private accepted(operation: Outbox, clearDraft = true) {
+    if (this.conversation?.id === operation.id && this.timeline.querySelector(".pi-phone-outbox-warning"))
+      this.messagesDirty = true;
     if (
       clearDraft &&
       this.conversation?.id === operation.id &&
@@ -1643,7 +1682,7 @@ export class MobileChatView extends ItemView {
       this.resetContactFeedback?.();
       this.today?.close(false);
     }
-    this.updateResponseStatus();
+    if (!home) this.prefetchRevision++;
     this.home.hidden = !home;
     this.timeline.hidden = home;
     this.footer.hidden = home;
@@ -1698,7 +1737,16 @@ export class MobileChatView extends ItemView {
       this.renderHome();
     }
   }
+  private queueHomeRefresh() {
+    if (this.homeRefreshTimer) return;
+    this.homeRefreshTimer = setTimeout(() => {
+      this.homeRefreshTimer = undefined;
+      if (this.homeMode) void this.refreshHome();
+    }, 120);
+  }
   private async refreshHome() {
+    clearTimeout(this.homeRefreshTimer);
+    this.homeRefreshTimer = undefined;
     this.today?.refresh();
     const revision = ++this.homeRevision;
     try {
@@ -1707,10 +1755,11 @@ export class MobileChatView extends ItemView {
           "conversation.list",
         );
       if (this.closed || revision !== this.homeRevision) return;
+      const changed = !this.summariesLoaded || !sameConversationData(this.summaries, list);
       this.summaries = list;
       this.summariesLoaded = true;
-      if (this.homeMode) this.renderHome();
-      this.prefetchRecent(list);
+      if (this.homeMode && changed) this.renderHome();
+      if (this.homeMode && !this.settings) this.prefetchRecent(list);
     } catch (error) {
       if (revision === this.homeRevision && this.homeMode) this.fail(error);
     }
@@ -1719,18 +1768,16 @@ export class MobileChatView extends ItemView {
     const revision = ++this.prefetchRevision;
     const latest = [...latestByAgent(list).values()]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    const ids = latest.map((item) => {
+    const ids = latest.slice(0, 12).map((item) => {
       const selected = this.app.loadLocalStorage(this.plugin.localKey("selected:" + item.agentId));
       return list.find((entry) => entry.id === selected && entry.agentId === item.agentId && !entry.archive)?.id ?? item.id;
-    }).slice(0, 12);
-    let index = 0;
-    const worker = async () => {
-      while (!this.closed && revision === this.prefetchRevision && index < ids.length) {
-        const id = ids[index++];
-        try { await this.conversationCache.load(id); } catch { /* A tap will retry. */ }
+    });
+    setTimeout(async () => {
+      for (const id of ids) {
+        if (this.closed || !this.homeMode || this.settings || revision !== this.prefetchRevision) return;
+        try { await this.conversationCache.prefetch(id); } catch { /* A tap will retry. */ }
       }
-    };
-    for (let n = 0; n < Math.min(3, ids.length); n++) void worker();
+    }, 180);
   }
   private renderHome() {
     if (!this.homeList) return;
@@ -2032,11 +2079,19 @@ export class MobileChatView extends ItemView {
     header.querySelector("button")?.focus();
   }
   private closeSettings() {
+    const wasOpen = Boolean(this.settings);
     this.disposeSettings?.();
     this.disposeSettings = undefined;
     this.settings?.remove();
     this.settings = undefined;
     this.contentEl.removeClass("is-settings");
+    if (wasOpen && !this.closed && !this.homeMode) {
+      if (this.messagesDirty) this.renderMessages();
+      const id = this.conversation?.id;
+      if (id && this.streams.get(id)?.text) this.ensureStreamNode(id);
+      if (this.flushStreams()) this.scheduleStream();
+      this.updateResponseStatus();
+    }
     this.settingsTrigger?.focus();
     this.settingsTrigger = undefined;
   }

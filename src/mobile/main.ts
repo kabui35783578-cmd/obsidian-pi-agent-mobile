@@ -320,23 +320,16 @@ export function renderPhoneSettings(
     attr: { role: "status", "aria-live": "polite" },
   });
   const update = () => {
-    status.setText(plugin.client.status);
+    if (status.textContent !== plugin.client.status) status.setText(plugin.client.status);
     card.toggleClass("is-connected", plugin.client.connected);
     card.toggleClass("is-offline", Boolean(plugin.client.credential) && !plugin.client.connected);
     remove.disabled = !plugin.client.credential;
-    endpoint.setText(plugin.client.credential?.endpoint ?? "尚未配对电脑");
-    title.setText(
-      plugin.client.description?.vaultName ??
-        plugin.client.credential?.vaultName ??
-        "连接我的电脑",
-    );
-    connect.setText(
-      plugin.client.connected
-        ? "打开助手"
-        : plugin.client.credential
-          ? "重新连接"
-          : "输入配对码",
-    );
+    const address = plugin.client.credential?.endpoint ?? "尚未配对电脑";
+    if (endpoint.textContent !== address) endpoint.setText(address);
+    const name = plugin.client.description?.vaultName ?? plugin.client.credential?.vaultName ?? "连接我的电脑";
+    if (title.textContent !== name) title.setText(name);
+    const action = plugin.client.connected ? "打开助手" : plugin.client.credential ? "重新连接" : "输入配对码";
+    if (connect.textContent !== action) connect.setText(action);
   };
   const actions = card.createDiv({ cls: "pi-phone-setting-actions" });
   const connect = actions.createEl("button", {

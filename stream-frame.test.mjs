@@ -7,3 +7,17 @@ test('a burst appears in incremental frames and catches up without losing text',
 test('emoji, replacement snapshots and tiny deltas remain whole',()=>{
  const text='👨‍👩‍👧‍👦你好🙂';let shown='';while(shown!==text){shown=streamFrame(text,shown).value;assert.ok(!shown.endsWith('\u200d'));}assert.equal(streamFrame('新的内容','正在电脑处理…').value,'新的');
 });
+
+test("long Unicode bursts land on whole graphemes and finish in bounded frames", () => {
+  const grapheme = "👨‍👩‍👧‍👦";
+  const text = grapheme.repeat(4_097);
+  let shown = "";
+  let frames = 0;
+  while (shown !== text) {
+    const next = streamFrame(text, shown);
+    assert.ok(next.value.startsWith(shown));
+    assert.equal(next.value.length % grapheme.length, 0);
+    shown = next.value;
+    assert.ok(++frames < 20);
+  }
+});

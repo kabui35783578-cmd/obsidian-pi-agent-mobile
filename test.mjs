@@ -46,3 +46,51 @@ test("shipped stylesheet includes the current phone styles", async () => {
   const phone = await fs.readFile("src/mobile/mobile.css", "utf8");
   assert.equal(styles.slice(styles.indexOf(marker) + marker.length + 1), phone);
 });
+
+test("a saved streamed stage clears the mobile buffer before the next reply", async () => {
+  const { build } = await import("esbuild");
+  const output = await build({
+    stdin: {
+      contents: 'export { MobileChatView } from "./src/mobile/view.ts";',
+      resolveDir: process.cwd(),
+    },
+    bundle: true,
+    platform: "browser",
+    format: "cjs",
+    external: ["obsidian"],
+    write: false,
+  });
+  const module = { exports: {} };
+  const api = { Plugin: class {}, Component: class {}, ItemView: class {}, Modal: class {}, PluginSettingTab: class {} };
+  runInNewContext(output.outputFiles[0].text, {
+    module, exports: module.exports, crypto: webcrypto, TextEncoder, TextDecoder,
+    require(name) { assert.equal(name, "obsidian"); return api; },
+  });
+
+  const view = Object.create(module.exports.MobileChatView.prototype);
+  const id = "chat";
+  let visible = "";
+  let refreshes = 0;
+  Object.assign(view, {
+    conversation: { id },
+    streams: new Map(),
+    streamNodes: new Map(),
+    delegationViews: new Map(),
+    ensureStreamNode() {},
+    flushStreams() { visible = this.streams.get(id)?.text ?? ""; },
+    updateResponseStatus() {},
+    queueRefresh() { refreshes++; },
+  });
+  const delta = (text, sequence) => view.onEvent({
+    type: "chat.delta", conversationId: id, delta: text, remoteSequence: sequence,
+  });
+  delta("已保存的阶段回复", 100);
+  assert.equal(visible, "已保存的阶段回复");
+  view.onEvent({ type: "chat.streamReset", conversationId: id, remoteSequence: 101 });
+  assert.equal(visible, "");
+  delta("迟到的数据", 100);
+  assert.equal(visible, "");
+  delta("下一段", 102);
+  assert.equal(visible, "下一段");
+  assert.equal(refreshes, 1);
+});

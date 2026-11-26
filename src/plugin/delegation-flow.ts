@@ -163,6 +163,7 @@ export class DelegationFlow {
   }
   stream(text: string) {
     if (!active(this.record) || this.disposed) return;
+    if (this.streamNode?.isConnected ? this.streamNode.data === text : !text) return;
     this.incoming.hidden = !text;
     if (!this.streamNode?.isConnected) {
       this.reply.empty();
