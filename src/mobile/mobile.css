@@ -368,7 +368,7 @@ button.pi-today-item + button.pi-today-item {
   align-items: flex-end;
   gap: 10px;
   flex: 0 0 auto;
-  padding: 10px 16px max(22px, env(safe-area-inset-bottom));
+  padding: 10px 24px max(22px, env(safe-area-inset-bottom));
   background: var(--pi-canvas);
 }
 .pi-phone-view button.pi-phone-return {
@@ -399,6 +399,7 @@ button.pi-today-item + button.pi-today-item {
   gap: 20px;
   padding: 8px 0 30px;
 }
+.pi-phone-favorites[data-count="1"] { padding-bottom: 24px; }
 .pi-phone-favorites[data-count="3"] {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -425,8 +426,8 @@ button.pi-today-item + button.pi-today-item {
 .pi-phone-pin-avatar {
   position: relative;
   display: block;
-  width: 88px;
-  height: 88px;
+  width: 98px;
+  height: 98px;
 }
 .pi-phone-favorites[data-count="2"] .pi-phone-pin-avatar { width: 72px; height: 72px; }
 .pi-phone-favorites[data-count="3"] .pi-phone-pin-avatar {
@@ -500,6 +501,15 @@ button.pi-today-item + button.pi-today-item {
   flex: 0 0 44px;
   background: transparent;
 }
+.pi-phone-home .pi-phone-recent > .pi-phone-contact {
+  gap: 8px;
+  min-height: 74px;
+}
+.pi-phone-home .pi-phone-recent > .pi-phone-contact > .pi-agent-avatar {
+  width: 52px;
+  height: 52px;
+  flex-basis: 52px;
+}
 .pi-phone-contact-body {
   flex: 1;
   min-width: 0;
@@ -539,6 +549,9 @@ button.pi-today-item + button.pi-today-item {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pi-phone-home .pi-phone-contact-title strong { font-size: 16px; }
+.pi-phone-home .pi-phone-contact-title time { font-size: 12px; }
+.pi-phone-home .pi-phone-contact-preview { font-size: 13px; }
 .pi-phone-contact-preview.is-running { color: var(--pi-running); font-weight: 500; }
 .pi-phone-live-dot {
   flex: 0 0 auto;
@@ -1746,42 +1759,25 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   .pi-phone-sheet-container .pi-phone-modal { animation: none; }
   .pi-phone-view :is(button.pi-phone-round, button.pi-phone-identity, button.pi-phone-favorite) { transition: none; }
 }
-.pi-phone-view button.pi-phone-today-entry {
+.pi-phone-contact > .pi-phone-today-avatar {
   display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 46px;
-  height: auto;
-  padding: 8px 12px;
-  margin: 0 0 12px;
-  border: 1px solid var(--pi-line);
-  border-radius: 14px;
-  box-shadow: none;
-  background: var(--pi-surface);
-  color: var(--pi-ink);
-  font: inherit;
-  text-align: left;
+  align-items: stretch;
+  box-sizing: border-box;
+  padding: 3px;
 }
-.pi-phone-today-entry-title { flex: none; font-size: 14px; font-weight: 650; }
-.pi-phone-today-counts {
+.pi-phone-today-avatar > span {
+  display: grid;
+  place-items: center;
   flex: 1;
-  min-width: 0;
-  color: var(--pi-secondary);
-  font-size: 13px;
-  white-space: nowrap;
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  border-radius: 44% 48% 43% 47%;
+  background: color-mix(in srgb, var(--pi-running) 18%, var(--pi-canvas));
+  color: color-mix(in srgb, var(--pi-running) 62%, var(--pi-ink));
 }
+.pi-phone-today-avatar svg { width: 24px; height: 24px; }
 .pi-phone-today-icon,
-.pi-phone-today-check,
-.pi-phone-today-chevron { display: grid; flex: none; color: var(--pi-secondary); }
-.pi-phone-today-chevron { margin-inline-start: auto; }
+.pi-phone-today-check { display: grid; flex: none; color: var(--pi-secondary); }
 .pi-phone-today-icon svg,
 .pi-phone-today-check svg { width: 18px; height: 18px; }
-.pi-phone-today-chevron svg { width: 15px; height: 15px; }
-.pi-phone-view .pi-phone-today-entry:active,
 .pi-phone-view .pi-phone-today-screen .pi-today-item:active { background: var(--pi-hover); }
 .pi-phone-today-screen {
   position: absolute;

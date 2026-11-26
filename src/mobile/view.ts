@@ -1755,12 +1755,12 @@ export class MobileChatView extends ItemView {
     );
     const pinned = this.pinnedAgents(agents);
     if (!query && pinned.length) this.renderPins(pinned, latest);
-    if (!query) this.today?.entry(this.homeContacts);
     const featuredIds = new Set(query ? [] : pinned.map((agent) => agent.id));
     const rows = this.homeContacts.createDiv({
       cls: "pi-phone-recent",
-      attr: { "aria-label": "助手聊天" },
+      attr: { "aria-label": "通讯录" },
     });
+    if (!query) this.today?.entry(rows);
     const matches = agents.filter(
       (agent) =>
         !featuredIds.has(agent.id) && (!query ||

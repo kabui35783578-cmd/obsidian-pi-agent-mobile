@@ -42,14 +42,14 @@ export class PhoneToday {
 
   entry(parent: HTMLElement) {
     const button = parent.createEl("button", {
-      cls: "pi-phone-today-entry",
+      cls: "pi-phone-contact pi-phone-today-entry",
       attr: { type: "button" },
     });
-    const icon = button.createSpan({ cls: "pi-phone-today-icon", attr: { "aria-hidden": "true" } });
-    setIcon(icon, "calendar-days");
-    button.createSpan({ cls: "pi-phone-today-entry-title", text: "今天" });
-    this.entryLabel = button.createSpan({ cls: "pi-phone-today-counts" });
-    setIcon(button.createSpan({ cls: "pi-phone-today-chevron", attr: { "aria-hidden": "true" } }), "chevron-right");
+    const avatar = button.createSpan({ cls: "pi-agent-avatar pi-phone-today-avatar", attr: { "aria-hidden": "true" } });
+    setIcon(avatar.createSpan(), "calendar-days");
+    const body = button.createDiv({ cls: "pi-phone-contact-body" });
+    body.createDiv({ cls: "pi-phone-contact-title" }).createEl("strong", { text: "今天" });
+    this.entryLabel = body.createDiv({ cls: "pi-phone-contact-preview" }).createSpan();
     button.addEventListener("click", () => this.open());
     this.entryButton = button;
     this.renderEntry();
