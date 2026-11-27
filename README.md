@@ -1,6 +1,6 @@
 # Pi Agent Mobile · 测试版
 
-当前测试版本 **0.2.36**。聊天分阶段汇报时，工具运行状态和协作记录会显示在对应阶段。更新说明见 [UI-CHANGELOG.md](UI-CHANGELOG.md)。
+当前测试版本 **0.2.37**。手机版会显示桌面选好的表情头像，聊天顶部会跟着任务进度换表情。更新说明见 [UI-CHANGELOG.md](UI-CHANGELOG.md)。
 
 Android / iPhone 上的 Obsidian 交互插件：手机聊天，电脑执行模型、Skills、MCP、笔记与命令任务。
 
@@ -15,7 +15,7 @@ Android / iPhone 上的 Obsidian 交互插件：手机聊天，电脑执行模�
    kabui35783578-cmd/obsidian-pi-agent-mobile
    ```
 
-3. 选择测试版本 **0.2.36**，安装并启用 **Pi Agent Mobile**。已安装旧版的用户，也请在 BRAT 中选择此版本更新。
+3. 选择测试版本 **0.2.37**，安装并启用 **Pi Agent Mobile**。已安装旧版的用户，也请在 BRAT 中选择此版本更新。
 4. 电脑进入“设置 → Obot → 连接 → 手机连接”，启用连接。远程连接使用自建 HTTPS 中转地址生成远程配对码；局域网或 VPN 连接选择手机能访问的电脑地址生成配对码。
 5. 手机打开“Pi Agent Mobile → 电脑连接”，粘贴配对码连接。配对码是 `pi-agent:…` 开头的完整文本，可用扫码工具读取电脑二维码后复制。
 
@@ -55,3 +55,7 @@ npm run verify
 GitHub Actions 在提交时验证构建；版本 tag 必须与 manifest/package/versions 一致（例如 `0.1.0`），随后发布标记为 **Pre-release** 的三文件测试版本。不会提交 Obsidian 社区插件市场。
 
 遵循 [BRAT 开发者指南](https://github.com/TfTHacker/obsidian42-brat/blob/main/BRAT-DEVELOPER-GUIDE.md)。MIT 许可证；Obsidian API 由宿主提供，不包含 Pi、微信、Node 等桌面依赖。
+
+## 第三方表情头像
+
+表情头像引擎与素材移植自 [NX_emotion-ball](https://github.com/jackyrx/NX_emotion-ball/tree/b4f97df96c022e08e24afad266dddf5f62cfb5fd)，版权归 sam70361 所有，按[仅供学习交流许可](licenses/NX_emotion-ball-LICENSE.txt)分发。该许可适用于表情头像引擎与素材，发布文件内附原始许可。

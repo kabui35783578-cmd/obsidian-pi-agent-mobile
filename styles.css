@@ -2807,6 +2807,20 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
 }
 .pi-phone-identity-chevron { display: grid; color: var(--pi-secondary); }
 .pi-phone-identity-chevron svg { width: 13px; height: 13px; }
+:is(.pi-phone-view, .pi-phone-modal) .pi-agent-avatar.pi-eb-avatar {
+  overflow: visible;
+  border-radius: 0;
+}
+:is(.pi-phone-view, .pi-phone-modal) .pi-eb-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.22));
+}
+.pi-phone-view .pi-phone-identity .pi-agent-avatar.pi-eb-avatar::after {
+  content: none;
+}
 .pi-phone-view .pi-phone-identity .pi-agent-avatar {
   width: 26px;
   height: 26px;
@@ -4132,7 +4146,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
   font-weight: 600;
 }
 .pi-phone-view .pi-phone-response-status[hidden] { display: none; }
-.pi-phone-response-avatar { flex: 0 0 28px; width: 28px; height: 28px; animation: pi-response-avatar-rotate 2.8s linear infinite; transform-origin: center; }
+.pi-phone-response-avatar { flex: 0 0 28px; width: 28px; height: 28px; }
 .pi-phone-response-avatar .pi-agent-avatar { display: block; width: 28px; height: 28px; }
 .pi-phone-response-text {
   min-width: 0;
@@ -4140,9 +4154,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@keyframes pi-response-avatar-rotate { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .pi-phone-response-avatar { animation: none; }
 }
 
 /* The exchange header floats over its messages; only its capsule is opaque. */

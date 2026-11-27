@@ -1,6 +1,9 @@
 import { App, TFile, setIcon, setTooltip } from "obsidian";
 import type { AgentRecord } from "../shared/types.ts";
 
+import { isBuiltinAvatarId } from "../shared/emotion-ball/index.ts";
+import { renderAnimatedAvatar, type AvatarRenderOptions } from "./avatar-motion.ts";
+
 export const DEFAULT_AVATARS = [
   { id: "coordinator", name: "总管" },
   { id: "reader", name: "阅读" },
@@ -13,7 +16,7 @@ export function defaultAvatarId(agent: AgentRecord) {
   const configured = agent.avatar.replace(/^builtin:/, "");
   if (
     agent.avatar.startsWith("builtin:") &&
-    DEFAULT_AVATARS.some((a) => a.id === configured)
+    isBuiltinAvatarId(configured)
   )
     return configured;
   if (agent.role === "manager") return "coordinator";
@@ -48,6 +51,7 @@ export function renderAvatar(
   agent: AgentRecord,
   cls = "",
   builtinImages?: Readonly<Record<string, string>>,
+  motion?: AvatarRenderOptions,
 ) {
   const el = parent.createSpan({
     cls: "pi-agent-avatar " + cls,
@@ -60,6 +64,7 @@ export function renderAvatar(
   const image = app.vault.getAbstractFileByPath(agent.avatar);
   if (builtin) {
     el.addClass("pi-avatar-art");
+    if (renderAnimatedAvatar(el, defaultAvatarId(agent), agent.id, motion)) return el;
     const explicit = agent.avatar?.startsWith("builtin:") ? agent.avatar.slice(8) : undefined;
     const bundled = explicit && builtinImages && Object.hasOwn(builtinImages, explicit)
       ? builtinImages[explicit]

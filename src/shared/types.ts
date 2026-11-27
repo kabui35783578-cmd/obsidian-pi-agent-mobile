@@ -113,6 +113,7 @@ export interface Conversation {
   updatedAt: string;
   messages: ChatMessage[];
   events: ToolEvent[];
+  progress?: RunProgress;
   status: "idle" | "running" | "failed" | "cancelled";
   piSessionFile?: string;
   /** Per-conversation overrides; absent means follow the agent/global setting. */
@@ -131,6 +132,13 @@ export interface Conversation {
   reminderId?: string;
   scheduledTaskId?: string;
   scheduledRunId?: string;
+}
+export interface RunProgress {
+  taskId: string;
+  phase: "preparing" | "connecting" | "waiting" | "thinking" | "responding" | "tool";
+  startedAt: number;
+  updatedAt: number;
+  toolName?: string;
 }
 export type ConversationSummary = Omit<
   Conversation,

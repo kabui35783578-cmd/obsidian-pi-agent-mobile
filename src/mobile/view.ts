@@ -344,6 +344,7 @@ export class MobileChatView extends ItemView {
     else this.welcome();
   }
   async onClose() {
+    this.avatars.clearChat();
     this.closed = true;
     this.today?.dispose();
     this.today = undefined;
@@ -417,6 +418,8 @@ export class MobileChatView extends ItemView {
     await this.showHome();
   }
   private renderHeader() {
+    if (this.closed) return;
+    this.avatars.clearChat();
     this.header.empty();
     this.header.hidden = this.homeMode && !this.plugin.client.description;
     if (this.header.hidden) return;
@@ -450,7 +453,6 @@ export class MobileChatView extends ItemView {
       cls: "pi-phone-identity",
       attr: { "aria-label": (this.agent?.name ?? "助手") + "，资料与聊天操作" },
     });
-    if (this.agent) this.avatars.render(identity, this.agent);
     const copy = identity.createSpan({ cls: "pi-phone-identity-copy" });
     copy.createEl("strong", { text: this.agent?.name ?? "Obot" });
     const status = copy.createSpan({ cls: "pi-phone-identity-status" });
@@ -464,6 +466,22 @@ export class MobileChatView extends ItemView {
       "电脑连接与状态",
       () => this.connectionInfo(),
       "pi-phone-round pi-phone-host",
+    );
+    this.updateChatAvatar();
+  }
+  private updateChatAvatar(toolName?: string) {
+    if (this.settings) return;
+    const identity = this.header?.querySelector<HTMLElement>(".pi-phone-identity");
+    if (!identity || !this.agent) return;
+    const connected = this.plugin.client.connected;
+    const conversation = connected ? this.conversation : undefined;
+    const streamed = conversation && this.streams.get(conversation.id)?.text;
+    this.avatars.updateChat(
+      identity,
+      this.agent,
+      conversation,
+      toolName ? { phase: "tool", toolName }
+        : streamed ? { phase: "responding" } : conversation?.progress,
     );
   }
   private controls() {
@@ -814,6 +832,7 @@ export class MobileChatView extends ItemView {
       if (current) this.agent = current;
     }
     this.avatars.refresh(this.contentEl, agents);
+    this.updateResponseStatus();
   }
   private onEvent(event: any) {
     if (this.closed) return;
@@ -1353,7 +1372,10 @@ export class MobileChatView extends ItemView {
     const c = this.conversation;
     const visible = !this.homeMode && c?.status === "running" && !!this.agent;
     this.responseStatus.hidden = !visible;
-    if (!visible || !c || !this.agent) return;
+    if (!visible || !c || !this.agent) {
+      this.updateChatAvatar();
+      return;
+    }
     if (this.responseAgentId !== this.agent.id) {
       this.responseAvatar.empty();
       this.avatars.render(this.responseAvatar, this.agent);
@@ -1362,6 +1384,7 @@ export class MobileChatView extends ItemView {
     const index = activityIndex(c);
     const live = toolSteps(c.events).reverse().find(event => event.status === "running" &&
       (event.messageIndex === undefined || event.messageIndex === index));
+    this.updateChatAvatar(live?.name);
     const label = live ? "正在" + toolLabel(live.name) + "…" : this.streams.get(c.id)?.text ? "正在回复…" : "正在处理…";
     if (this.responseText.textContent !== label) this.responseText.setText(label);
   }
@@ -2081,6 +2104,7 @@ export class MobileChatView extends ItemView {
       void this.showHome();
     });
     this.contentEl.addClass("is-settings");
+    this.avatars.clearChat();
     header.querySelector("button")?.focus();
   }
   private closeSettings() {

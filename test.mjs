@@ -22,6 +22,21 @@ test("all 18 desktop avatars are embedded and need no extra downloaded files", (
   assert.equal(images.length, 18);
   for (const [, data] of images) assert.match(Buffer.from(data, "base64").toString(), /^<svg/);
 });
+test("desktop avatar IDs and task expressions resolve in the phone bundle", async () => {
+  const { EMOTION_SHAPE_ORDER, EMOTION_COLORS, resolveEmotionAvatar, emotionForProgress } =
+    await import("./src/shared/emotion-ball/index.ts");
+  for (const { key: shape } of EMOTION_SHAPE_ORDER) {
+    for (const { key } of EMOTION_COLORS) {
+      const avatar = resolveEmotionAvatar("builtin:" + shape + ":" + key);
+      assert.equal(avatar?.shape, shape);
+      assert.equal(avatar?.colorKey, key);
+    }
+  }
+  assert.equal(resolveEmotionAvatar("constructor:blue"), null);
+  assert.equal(emotionForProgress({ phase: "tool", toolName: "vault_search" }), "40");
+  assert.equal(emotionForProgress({ phase: "responding" }), "39");
+  assert.match(bundle, /Copyright \(c\) 2026 sam70361/);
+});
 test("mobile manifest and release metadata agree", async () => {
   const manifest = JSON.parse(await fs.readFile("manifest.json", "utf8"));
   const pkg = JSON.parse(await fs.readFile("package.json", "utf8"));
