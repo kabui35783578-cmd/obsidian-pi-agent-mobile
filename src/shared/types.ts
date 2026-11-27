@@ -71,7 +71,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 };
 export interface ChatMessage {
   mobileOperationId?: string;
-  kind?: "command" | "delegation";
+  kind?: "command" | "delegation" | "progress";
   role: "user" | "assistant" | "system";
   text: string;
   at: string;

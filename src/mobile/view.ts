@@ -61,6 +61,12 @@ const sourceName = (source: string) =>
     source
   ] ?? source;
 const safeMarkdown = safeRemoteMarkdown;
+
+function activityIndex(conversation: Conversation & { messageOffset?: number }) {
+  return (conversation.messageOffset ?? 0) + conversation.messages.findLastIndex(
+    (message) => message.role === "user" || message.kind === "progress",
+  );
+}
 interface Outbox {
   command?: boolean;
   operationId: string;
@@ -940,8 +946,7 @@ export class MobileChatView extends ItemView {
         const steps = toolSteps(conversation.events.filter(item => item.messageIndex === index &&
           !(conversation.delegations?.some(record => record.messageIndex === index) &&
             (item.name === "delegate_task" || item.name.startsWith("delegate:")))));
-        this.updateActivity(view, steps, index,
-          ((conversation as any).messageOffset ?? 0) + conversation.messages.findLastIndex(message => message.role === "user"));
+        this.updateActivity(view, steps, index, activityIndex(conversation));
         if (follow) this.timeline.scrollTop = this.timeline.scrollHeight;
       } else {
         this.messagesDirty = true;
@@ -992,8 +997,7 @@ export class MobileChatView extends ItemView {
     for(const [id,view] of this.delegationViews)if(!wanted.has(id)){view.dispose();this.delegationViews.delete(id);}
     const offset = (c as any).messageOffset ?? 0;
     const start = Math.max(0, c.messages.length - this.limit);
-    const activeIndex =
-      offset + c.messages.findLastIndex((message) => message.role === "user");
+    const activeIndex = activityIndex(c);
     const eventGroups = new Map<number | undefined, ToolEvent[]>();
     const delegated = new Set(
       c.delegations?.map((record) => record.messageIndex),
@@ -1355,8 +1359,9 @@ export class MobileChatView extends ItemView {
       this.avatars.render(this.responseAvatar, this.agent);
       this.responseAgentId = this.agent.id;
     }
+    const index = activityIndex(c);
     const live = toolSteps(c.events).reverse().find(event => event.status === "running" &&
-      (event.messageIndex === undefined || event.messageIndex === ((c as any).messageOffset ?? 0) + c.messages.findLastIndex(message => message.role === "user")));
+      (event.messageIndex === undefined || event.messageIndex === index));
     const label = live ? "正在" + toolLabel(live.name) + "…" : this.streams.get(c.id)?.text ? "正在回复…" : "正在处理…";
     if (this.responseText.textContent !== label) this.responseText.setText(label);
   }

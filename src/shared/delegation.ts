@@ -12,8 +12,10 @@ export function delegationAnchor(
     let i = anchor + 1;
     i < messages.length && messages[i].role !== "user";
     i++
-  )
+  ) {
+    if (messages[i].kind === "progress") break;
     if (messages[i].role === "assistant") anchor = i;
+  }
   return anchor;
 }
 

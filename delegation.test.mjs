@@ -8,6 +8,16 @@ test('completed handoff follows the answer in its own turn; running stays at the
   assert.equal(delegationAnchor({messageIndex:0,status:'completed'}, messages), 2);
   assert.equal(delegationAnchor({messageIndex:-1,status:'completed'}, messages), -1);
 });
+test('completed handoff stays with its own stage', () => {
+  const messages = [
+    { role: 'user' },
+    { role: 'assistant' },
+    { role: 'assistant', kind: 'progress' },
+    { role: 'assistant' },
+  ];
+  assert.equal(delegationAnchor({ messageIndex: 0, status: 'completed' }, messages), 1);
+  assert.equal(delegationAnchor({ messageIndex: 2, status: 'completed' }, messages), 3);
+});
 test('internal handoff is hidden in normal chat but explicit delegation can be identified', () => {
   assert.equal(isDelegationMessage({role:'user'}, {source:'delegation',parent:{}}, 0), true);
   assert.equal(isDelegationMessage({role:'user'}, {source:'mobile'}, 0), false);
