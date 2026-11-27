@@ -27,6 +27,7 @@ import { ConversationCache, sameConversationData } from "./conversation-cache.ts
 import { DelegationFlow } from "../plugin/delegation-flow.ts";
 import { readPhoneFile } from "./local-file.ts";
 import { installContactEdgeFeedback } from "./contact-edge-feedback.ts";
+import { installContactMotion } from "./contact-motion.ts";
 import { SlashMenu } from "../plugin/slash-menu.ts";
 import { handleSlashUI } from "../plugin/command-ui.ts";
 import { CommandDraft } from "../plugin/command-draft.ts";
@@ -134,7 +135,17 @@ export class MobileChatView extends ItemView {
   private home!: HTMLElement;
   private homeList!: HTMLElement;
   private homeContacts!: HTMLElement;
-  private resetContactFeedback?: () => void;
+  private contactFeedback?: ReturnType<typeof installContactEdgeFeedback>;
+  private contactMotion?: ReturnType<typeof installContactMotion>;
+  private pendingHomeRender = false;
+  private pendingRecentPrefetch = false;
+  private homeRows!: HTMLElement;
+  private homeEntries = new Map<string, { key: string; button: HTMLButtonElement }>();
+  private homeAgents = new Map<string, AgentRecord>();
+  private homePinned: AgentRecord[] = [];
+  private homePins?: { key: string; grid: HTMLElement };
+  private homeToday?: HTMLButtonElement;
+  private homeEmpty?: HTMLElement;
   private homeSearch!: HTMLInputElement;
   private settingsTrigger?: HTMLElement;
   private homeDock!: HTMLElement;
@@ -217,7 +228,16 @@ export class MobileChatView extends ItemView {
     this.homeSearch.addEventListener("input", () => this.renderHome());
     this.homeList = this.home.createDiv({ cls: "pi-phone-home-list" });
     this.homeContacts = this.homeList.createDiv({ cls: "pi-phone-home-contacts" });
-    this.resetContactFeedback = installContactEdgeFeedback(this.homeList, this.homeContacts);
+    this.homeRows = this.homeContacts.createDiv({
+      cls: "pi-phone-recent",
+      attr: { "aria-label": "通讯录" },
+    });
+    this.contactFeedback = installContactEdgeFeedback(this.homeList, this.homeContacts);
+    this.contactMotion = installContactMotion(this.homeList, () => {
+      if (!this.homeMode || this.settings) return;
+      if (this.pendingHomeRender) this.renderHome();
+      if (this.pendingRecentPrefetch) this.prefetchRecent(this.summaries);
+    });
     this.homeDock = this.home.createDiv({ cls: "pi-phone-home-dock" });
     iconButton(
       this.homeDock,
@@ -344,6 +364,12 @@ export class MobileChatView extends ItemView {
     else this.welcome();
   }
   async onClose() {
+    this.contactFeedback?.dispose();
+    this.contactMotion?.dispose();
+    this.pendingHomeRender = this.pendingRecentPrefetch = false;
+    this.homeEntries.clear();
+    this.homeAgents.clear();
+    this.homePins = this.homeToday = this.homeEmpty = undefined;
     this.avatars.clearChat();
     this.closed = true;
     this.today?.dispose();
@@ -367,9 +393,9 @@ export class MobileChatView extends ItemView {
   private welcome() {
     this.today?.close(false);
     this.setScreen(true);
-    this.resetContactFeedback?.();
-    this.homeContacts.empty();
+    this.contactFeedback?.reset();
     this.homeList.empty();
+    this.contactMotion?.sync();
     this.timeline.empty();
     this.homeSearch.value = "";
     this.homeSearch.parentElement!.hidden = true;
@@ -827,11 +853,16 @@ export class MobileChatView extends ItemView {
   refreshAvatars() {
     const agents = this.plugin.client.description?.agents;
     if (this.closed || !agents) return;
+    if (this.homeMode && this.contactMotion?.scrolling) {
+      this.pendingHomeRender = true;
+      return;
+    }
     if (this.agent) {
       const current = agents.find((agent: AgentRecord) => agent.id === this.agent?.id);
       if (current) this.agent = current;
     }
     this.avatars.refresh(this.contentEl, agents);
+    if (this.homeMode) this.contactMotion?.sync();
     this.updateResponseStatus();
   }
   private onEvent(event: any) {
@@ -993,7 +1024,7 @@ export class MobileChatView extends ItemView {
         .then(() => {
           if (this.closed) return;
           this.refreshAvatars();
-          if (this.homeMode) this.renderHome();
+          if (this.homeMode) this.renderHomeWhenStill();
         })
         .catch((e) => this.fail(e));
     }
@@ -1707,10 +1738,14 @@ export class MobileChatView extends ItemView {
     if(home)for(const view of this.delegationViews.values())view.closeDetail(true);
     this.homeMode = home;
     if (!home) {
-      this.resetContactFeedback?.();
+      this.contactFeedback?.reset();
+      this.contactMotion?.reset();
       this.today?.close(false);
     }
-    if (!home) this.prefetchRevision++;
+    if (!home) {
+      this.prefetchRevision++;
+      this.pendingRecentPrefetch = false;
+    }
     this.home.hidden = !home;
     this.timeline.hidden = home;
     this.footer.hidden = home;
@@ -1786,7 +1821,7 @@ export class MobileChatView extends ItemView {
       const changed = !this.summariesLoaded || !sameConversationData(this.summaries, list);
       this.summaries = list;
       this.summariesLoaded = true;
-      if (this.homeMode && changed) this.renderHome();
+      if (this.homeMode && changed) this.renderHomeWhenStill();
       if (this.homeMode && !this.settings) this.prefetchRecent(list);
     } catch (error) {
       if (revision === this.homeRevision && this.homeMode) this.fail(error);
@@ -1794,6 +1829,8 @@ export class MobileChatView extends ItemView {
   }
   private prefetchRecent(list: ConversationSummary[]) {
     const revision = ++this.prefetchRevision;
+    this.pendingRecentPrefetch = Boolean(this.contactMotion?.scrolling);
+    if (this.pendingRecentPrefetch) return;
     const latest = [...latestByAgent(list).values()]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     const ids = latest.slice(0, 12).map((item) => {
@@ -1803,17 +1840,25 @@ export class MobileChatView extends ItemView {
     setTimeout(async () => {
       for (const id of ids) {
         if (this.closed || !this.homeMode || this.settings || revision !== this.prefetchRevision) return;
+        if (this.contactMotion?.scrolling) {
+          this.pendingRecentPrefetch = true;
+          return;
+        }
         try { await this.conversationCache.prefetch(id); } catch { /* A tap will retry. */ }
       }
     }, 180);
   }
+  private renderHomeWhenStill() {
+    if (this.settings || this.contactMotion?.scrolling) this.pendingHomeRender = true;
+    else this.renderHome();
+  }
   private renderHome() {
     if (!this.homeList) return;
+    this.pendingHomeRender = false;
     if (this.homeContacts.parentElement !== this.homeList) {
       this.homeList.empty();
       this.homeList.append(this.homeContacts);
     }
-    this.homeContacts.empty();
     const query = this.homeSearch.value.trim().toLocaleLowerCase();
     const latestMap = latestByAgent(this.summaries);
     const latest = (id: string) => latestMap.get(id);
@@ -1828,14 +1873,17 @@ export class MobileChatView extends ItemView {
         ) ||
         a.name.localeCompare(b.name, "zh-CN"),
     );
-    const pinned = this.pinnedAgents(agents);
-    if (!query && pinned.length) this.renderPins(pinned, latest);
-    const featuredIds = new Set(query ? [] : pinned.map((agent) => agent.id));
-    const rows = this.homeContacts.createDiv({
-      cls: "pi-phone-recent",
-      attr: { "aria-label": "通讯录" },
-    });
-    if (!query) this.today?.entry(rows);
+    this.homeAgents = new Map(agents.map(agent => [agent.id, agent]));
+    this.homePinned = this.pinnedAgents(agents);
+    const featured = query ? [] : this.homePinned;
+    const featuredIds = new Set(featured.map(agent => agent.id));
+    this.updatePins(featured, latest);
+    const rows = this.homeRows;
+    const items: HTMLElement[] = [];
+    if (!query && this.today) {
+      this.homeToday ??= this.today.entry(rows);
+      items.push(this.homeToday);
+    }
     const matches = agents.filter(
       (agent) =>
         !featuredIds.has(agent.id) && (!query ||
@@ -1850,28 +1898,59 @@ export class MobileChatView extends ItemView {
         latest(b.id)!.updatedAt.localeCompare(latest(a.id)!.updatedAt),
       );
     const others = matches.filter((agent) => !latest(agent.id));
-    for (const agent of [...recent, ...others])
-      this.renderContact(rows, agent, latest(agent.id), pinned);
-    if (query && !matches.length)
-      rows.createDiv({
-        cls: "pi-phone-empty",
-        text: "没有找到，试试助手名字或聊天内容。",
-      });
-    if (!agents.length)
-      rows.createDiv({
-        cls: "pi-phone-empty",
-        text: "还没有助手，请先在电脑打开 Obot。",
-      });
+    for (const id of this.homeEntries.keys()) {
+      if (!this.homeAgents.has(id)) this.homeEntries.delete(id);
+    }
+    const day = new Date().toDateString();
+    for (const agent of [...recent, ...others]) {
+      const summary = latest(agent.id);
+      const key = JSON.stringify([
+        agent.name, agent.description, agent.scope, summary?.preview, summary?.status,
+        summary?.updatedAt, summary && day,
+      ]);
+      const previous = this.homeEntries.get(agent.id);
+      const entry = previous?.key === key
+        ? previous
+        : { key, button: this.renderContact(rows, agent, summary) };
+      this.homeEntries.set(agent.id, entry);
+      items.push(entry.button);
+    }
+    const empty = !agents.length ? "还没有助手，请先在电脑打开 Obot。"
+      : query && !matches.length ? "没有找到，试试助手名字或聊天内容。" : "";
+    if (empty) {
+      this.homeEmpty ??= rows.createDiv({ cls: "pi-phone-empty" });
+      if (this.homeEmpty.textContent !== empty) this.homeEmpty.setText(empty);
+      items.push(this.homeEmpty);
+    }
+    const retained = new Set(items);
+    for (const child of Array.from(rows.children)) {
+      if (!retained.has(child as HTMLElement)) child.remove();
+    }
+    let next = rows.firstElementChild;
+    for (const item of items) {
+      if (item === next) next = next.nextElementSibling;
+      else rows.insertBefore(item, next);
+    }
+    this.avatars.refresh(this.homeContacts, agents);
+    this.contactMotion?.sync();
     this.controls();
   }
-  private renderPins(
+  private updatePins(
     featured: AgentRecord[],
     latest: (id: string) => ConversationSummary | undefined,
   ) {
+    const key = JSON.stringify(featured.map(agent =>
+      [agent.id, agent.name, latest(agent.id)?.status === "running"]));
+    if (key === this.homePins?.key) return;
+    this.homePins?.grid.remove();
+    this.homePins = undefined;
+    if (!featured.length) return;
     const grid = this.homeContacts.createDiv({
       cls: "pi-phone-favorites",
       attr: { "aria-label": "固定助手，长按调整", "data-count": String(featured.length) },
     });
+    this.homeRows.before(grid);
+    this.homePins = { key, grid };
     for (const [index, agent] of featured.entries()) {
       const running = latest(agent.id)?.status === "running";
       const button = grid.createEl("button", {
@@ -1887,15 +1966,13 @@ export class MobileChatView extends ItemView {
         setIcon(avatar.createSpan({ cls: "pi-phone-pin-star", attr: { "aria-hidden": "true" } }), "star");
       avatar.classList.toggle("is-running", running);
       button.createSpan({ cls: "pi-pin-name", text: agent.name });
-      this.pinGesture(button, agent, featured);
-      button.addEventListener("click", () => void this.selectAgent(agent));
+      this.bindContact(button, agent.id);
     }
   }
   private renderContact(
     parent: HTMLElement,
     agent: AgentRecord,
     summary: ConversationSummary | undefined,
-    pinned: AgentRecord[],
   ) {
     const brief = summary
       ? describePreview(summary.preview, summary.status === "running")
@@ -1925,8 +2002,18 @@ export class MobileChatView extends ItemView {
       detail.createSpan({ cls: "pi-phone-live-dot", attr: { "aria-hidden": "true" } });
     }
     detail.createSpan({ text: preview });
-    this.pinGesture(button, agent, pinned);
-    button.addEventListener("click", () => void this.selectAgent(agent));
+    this.bindContact(button, agent.id);
+    return button;
+  }
+  private bindContact(button: HTMLButtonElement, agentId: string) {
+    this.pinGesture(button, () => {
+      const agent = this.homeAgents.get(agentId);
+      if (agent) this.pinMenu(agent, this.homePinned);
+    });
+    button.addEventListener("click", () => {
+      const agent = this.homeAgents.get(agentId);
+      if (agent) void this.selectAgent(agent);
+    });
   }
   private composerAgent() {
     const agents = (this.plugin.client.description?.agents ?? []) as AgentRecord[];
@@ -2010,8 +2097,7 @@ export class MobileChatView extends ItemView {
   }
   private pinGesture(
     button: HTMLButtonElement,
-    agent: AgentRecord,
-    featured: AgentRecord[],
+    showMenu: () => void,
   ) {
     let timer: ReturnType<typeof setTimeout> | undefined,
       suppressClick = false,
@@ -2025,7 +2111,7 @@ export class MobileChatView extends ItemView {
       cancel();
       suppressClick = true;
       if (button.isConnected && !this.closed)
-        this.pinMenu(agent, featured);
+        showMenu();
     };
     button.addEventListener("contextmenu", (event) => {
       event.preventDefault();
@@ -2114,6 +2200,7 @@ export class MobileChatView extends ItemView {
     this.settings?.remove();
     this.settings = undefined;
     this.contentEl.removeClass("is-settings");
+    if (wasOpen && !this.closed && this.homeMode && this.pendingHomeRender) this.renderHome();
     if (wasOpen && !this.closed && !this.homeMode) {
       if (this.messagesDirty) this.renderMessages();
       const id = this.conversation?.id;

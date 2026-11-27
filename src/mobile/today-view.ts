@@ -230,8 +230,9 @@ export class PhoneToday {
       this.activity?.results.length ? this.activity.results.length + " 条结果" : "",
       this.activity?.running.length ? this.activity.running.length + " 项进行中" : "",
     ].filter(Boolean);
-    label.setText(parts.slice(0, 2).join(" · ") || (!this.client.connected ? "电脑未连接" :
-      this.todos && this.activity && !this.todosError && !this.todos.warnings && !this.activityError && !this.activity.partial ? "暂无新事项" : "查看待办和进展"));
+    const text = parts.slice(0, 2).join(" · ") || (!this.client.connected ? "电脑未连接" :
+      this.todos && this.activity && !this.todosError && !this.todos.warnings && !this.activityError && !this.activity.partial ? "暂无新事项" : "查看待办和进展");
+    if (label.textContent !== text) label.setText(text);
   }
 
   private render() {

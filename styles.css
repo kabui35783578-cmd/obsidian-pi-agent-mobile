@@ -2880,7 +2880,10 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
   min-height: 0;
   overflow: auto;
   padding: var(--pi-phone-top-space, 66px) 22px 20px;
-  overscroll-behavior: none;
+  overscroll-behavior-y: contain;
+}
+.pi-phone-home-list[data-contact-short] {
+  touch-action: pinch-zoom;
 }
 .pi-phone-home-contacts {
   transition: transform 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
@@ -3118,6 +3121,33 @@ button.pi-today-item + button.pi-today-item {
   width: 52px;
   height: 52px;
   flex-basis: 52px;
+}
+/* Animate already-drawn avatars without ticking the SVG engine. */
+@media (prefers-reduced-motion: no-preference) {
+  .pi-phone-home-list [data-contact-visible] > .pi-eb-svg {
+    animation: pi-phone-contact-breathe 5s ease-in-out infinite;
+    animation-delay: var(--pi-phone-contact-motion-delay, 0s);
+  }
+  .pi-phone-contact-eye {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .pi-phone-home-list [data-contact-visible] .pi-phone-contact-eye {
+    animation: pi-phone-contact-blink 6s ease-in-out infinite;
+    animation-delay: var(--pi-phone-contact-motion-delay, 0s);
+  }
+  .pi-phone-home-list[data-contact-scrolling] [data-contact-visible] :is(.pi-eb-svg, .pi-phone-contact-eye),
+  .pi-phone-view:is(.is-settings, .is-today-open) .pi-phone-home-list [data-contact-visible] :is(.pi-eb-svg, .pi-phone-contact-eye) {
+    animation-play-state: paused;
+  }
+}
+@keyframes pi-phone-contact-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-1.8px) scale(1.035); }
+}
+@keyframes pi-phone-contact-blink {
+  0%, 68%, 74%, 100% { transform: scaleY(1); }
+  71% { transform: scaleY(0.12); }
 }
 .pi-phone-contact-body {
   flex: 1;
