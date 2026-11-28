@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { installSwipeNavigation } from "./swipe-navigation.ts";
+import { installSwipeNavigation, NATIVE_HORIZONTAL_SCROLL } from "./swipe-navigation.ts";
 
 function event(type: string, x: number, y: number, count = 1) {
   const e = new Event(type, { cancelable: true });
@@ -77,5 +77,35 @@ test("a gesture captured in chat remains intercepted if active leaf changes mid-
   target.dispatchEvent(event("touchend", 70, 52, 0));
   assert.equal(move.defaultPrevented, true);
   assert.equal(hostMoves, 0);
+  assert.equal(backs, 1);
+});
+
+test("horizontal touches starting on a nested timeline node scroll without navigating", () => {
+  const target = new EventTarget();
+  let backs = 0, hostMoves = 0, hostEnds = 0;
+  installSwipeNavigation(target as unknown as Window, () => true, () => backs++);
+  target.addEventListener("touchmove", () => hostMoves++);
+  target.addEventListener("touchend", () => hostEnds++);
+
+  for (const [x, y, dx, dy] of [[150, 50, -90, 2], [40, 50, 95, 4], [40, 50, 2, 90]]) {
+    const start = event("touchstart", x, y);
+    Object.defineProperty(start, "composedPath", {
+      value: () => [{ hasAttribute: () => false }, { hasAttribute: (name: string) => name === NATIVE_HORIZONTAL_SCROLL }, target],
+    });
+    target.dispatchEvent(start);
+    const move = event("touchmove", x + dx, y + dy);
+    const end = event("touchend", x + dx, y + dy, 0);
+    target.dispatchEvent(move);
+    target.dispatchEvent(end);
+    assert.equal(move.defaultPrevented, false);
+    assert.equal(end.defaultPrevented, false);
+  }
+  assert.equal(backs, 0);
+  assert.equal(hostMoves, 1);
+  assert.equal(hostEnds, 1);
+
+  target.dispatchEvent(event("touchstart", 170, 50));
+  target.dispatchEvent(event("touchmove", 80, 50));
+  target.dispatchEvent(event("touchend", 80, 50, 0));
   assert.equal(backs, 1);
 });

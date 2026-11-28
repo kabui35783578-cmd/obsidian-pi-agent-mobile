@@ -5,7 +5,7 @@ import { safeRemoteMarkdown } from "./artifacts.ts";
 import type { MobileClient } from "./client.ts";
 import { TodayActivityIndex, type TodayActivity, type TodayResult, type TodayTodo, type TodayTodos } from "./today-data.ts";
 
-import { renderTodayTimeline, todayTimelineIcon, type TodayTimelineItem } from "./today-timeline.ts";
+import { renderTodayTimeline, todayTimelineIcon, type TodayTimelineItem, type TodayTimelineSelection } from "./today-timeline.ts";
 
 const formatTimelineTime = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -33,6 +33,7 @@ export class PhoneToday {
   private detail?: Component;
   private lastListTop = 0;
   private animateHero = false;
+  private heroMotion?: IntersectionObserver;
   private timeline?: ReturnType<typeof renderTodayTimeline>;
 
   constructor(
@@ -115,7 +116,7 @@ export class PhoneToday {
 
   close(restoreFocus = true) {
     this.clearDetail();
-    this.clearTimeline();
+    this.clearHero();
     this.screen?.remove();
     this.screen = this.body = this.title = this.back = undefined;
     this.root.removeClass("is-today-open");
@@ -152,7 +153,7 @@ export class PhoneToday {
     this.todos = this.activity = undefined;
     this.todosError = this.activityError = this.writeError = "";
     this.pending.clear();
-    this.clearTimeline();
+    this.clearHero();
     this.clearDetail();
   }
 
@@ -240,7 +241,9 @@ export class PhoneToday {
     if (label.textContent !== text) label.setText(text);
   }
 
-  private clearTimeline() {
+  private clearHero() {
+    this.heroMotion?.disconnect();
+    this.heroMotion = undefined;
     this.timeline?.dispose();
     this.timeline = undefined;
   }
@@ -257,11 +260,11 @@ export class PhoneToday {
     const active = body.ownerDocument.activeElement;
     const focus = active && body.contains(active) ? active.getAttribute("data-today-focus") : undefined;
     const scrollTop = body.scrollTop;
-    const selectedNode = this.timeline?.selectedKey();
-    this.clearTimeline();
+    const timelineSelection = this.timeline?.selection();
+    this.clearHero();
     body.empty();
     this.title?.setText("今天");
-    this.renderHero(body, selectedNode);
+    this.renderHero(body, timelineSelection);
     const notice = (text: string) => body.createEl("p", { cls: "pi-phone-today-notice", text, attr: { role: "status" } });
     if (!this.client.connected)
       notice(this.todos || this.activity ? "电脑离线 · 显示上次读取的内容" : "连接电脑后查看今天的待办和进展");
@@ -334,7 +337,7 @@ export class PhoneToday {
     }
   }
 
-  private renderHero(body: HTMLElement, selectedNode?: string) {
+  private renderHero(body: HTMLElement, timelineSelection?: TodayTimelineSelection) {
     const now = new Date();
     const day = this.todos?.date ? new Date(this.todos.date + "T12:00:00") : now;
     const hero = body.createDiv({ cls: "pi-phone-today-hero" });
@@ -351,7 +354,12 @@ export class PhoneToday {
     date.createSpan({ cls: "pi-phone-today-day-label", text: (day.getMonth() + 1) + "月 · " + week });
     date.createSpan({ cls: "pi-phone-today-day-number", text: String(day.getDate()).padStart(2, "0") });
     const art = top.createDiv({ cls: "pi-phone-today-hero-art", attr: { "aria-hidden": "true" } });
-    art.createDiv({ cls: "pi-phone-today-hero-face" });
+    const face = art.createDiv({ cls: "pi-phone-today-hero-face" });
+    const Observer = body.ownerDocument.defaultView?.IntersectionObserver;
+    if (Observer) {
+      this.heroMotion = new Observer(([entry]) => face.classList.toggle("is-visible", entry.isIntersecting), { root: body });
+      this.heroMotion.observe(face);
+    } else face.classList.add("is-visible");
     const stats = hero.createDiv({ cls: "pi-phone-today-stats" });
     const groups = [
       { kind: "results", label: "已完成", count: this.activity?.results.length },
@@ -383,15 +391,15 @@ export class PhoneToday {
       });
     }
     for (const item of this.activity?.running ?? []) {
-      items.push({ key: "running:" + item.conversationId, title: item.title, status: "running", icon: "clock" });
+      items.push({ key: "running:" + item.conversationId, title: item.title, status: "running", icon: "clock", detail: this.agentName(item.agentId) });
     }
     for (const item of this.todos?.items ?? []) {
-      items.push({ key: "pending:" + item.id, title: item.text, status: "pending", icon: todayTimelineIcon(item.text) });
+      items.push({ key: "pending:" + item.id, title: item.text, status: "pending", icon: todayTimelineIcon(item.text), detail: item.note });
     }
     const emptyText = !this.client.connected ? "连接电脑后查看时间线" :
       this.todosError || this.activityError || this.todos?.warnings || this.activity?.partial ? "部分事项未能读取" :
       !this.activity || (this.client.description?.mobileTodayTodos && !this.todos) ? "正在读取今天的事项…" : "今天暂无事项";
-    this.timeline = renderTodayTimeline(hero, items, selectedNode, emptyText);
+    this.timeline = renderTodayTimeline(hero, items, timelineSelection, emptyText);
   }
 
   private row(parent: HTMLElement, title: string, detail: string, icon: string, key: string, open: () => void, enabled = true) {
@@ -414,7 +422,7 @@ export class PhoneToday {
     const body = this.body;
     if (!body) return;
     this.lastListTop = body.scrollTop;
-    this.clearTimeline();
+    this.clearHero();
     body.empty();
     body.scrollTop = 0;
     this.title?.setText("结果");

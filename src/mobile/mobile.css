@@ -2009,7 +2009,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   height: 14px;
   border-radius: 3px;
   background: #0f1230;
-  transform: rotate(-8deg);
+  rotate: -8deg;
   content: "";
 }
 .pi-phone-today-stats {
@@ -2090,21 +2090,57 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   color: #ffffffc7;
   font-size: 11px;
 }
+.pi-phone-today-timeline-detail {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #ffffff1f;
+  border-radius: 14px;
+  background: #ffffff0f;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.pi-phone-today-timeline-detail[hidden] { display: none; }
+.pi-phone-today-timeline-detail-copy { min-width: 0; }
+.pi-phone-today-timeline-detail-copy > div { margin-top: 4px; color: #ffffffe6; font-size: 11px; }
+.pi-phone-view .pi-phone-today-timeline-detail > button {
+  flex: none;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #ffffff20;
+  box-shadow: none;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+}
 .pi-phone-today-timeline-legend { gap: 14px; }
 .pi-phone-today-timeline-legend > span { gap: 6px; white-space: nowrap; }
-.pi-phone-today-node { cursor: pointer; transition: opacity .25s ease; }
+.pi-phone-today-node {
+  cursor: pointer;
+  transition: opacity .25s ease;
+  -webkit-tap-highlight-color: transparent;
+}
 .pi-phone-today-node text {
   text-anchor: middle;
   font-family: var(--pi-today-font);
   pointer-events: none;
   user-select: none;
 }
-.pi-phone-today-node:focus-visible { opacity: 1 !important; outline: none; }
+.pi-phone-today-node:focus { outline: none; }
+.pi-phone-today-node:focus-visible { opacity: 1 !important; }
 .pi-phone-today-node:focus-visible .pi-phone-today-node-hit { stroke: #fff; stroke-dasharray: 2 2; }
 .pi-phone-today-node-selected { opacity: 0; transition: opacity .3s ease; }
 .pi-phone-today-node.is-focused .pi-phone-today-node-selected { opacity: 1; }
 .pi-phone-today-ripple { transition: transform .45s cubic-bezier(.2, .8, .2, 1); }
 @media (prefers-reduced-motion: no-preference) {
+  .pi-phone-today-hero-face.is-visible { animation: pi-today-float 4.8s ease-in-out infinite; }
+  .pi-phone-today-hero-face.is-visible::before,
+  .pi-phone-today-hero-face.is-visible::after { animation: pi-phone-contact-blink 4.6s ease-in-out -.8s infinite; }
   .pi-phone-today-node-badge { animation: pi-today-float 4.2s ease-in-out infinite; }
   .pi-phone-today-node-badge.is-float-1 { animation-duration: 4.9s; animation-delay: -1.3s; }
   .pi-phone-today-node-badge.is-float-2 { animation-duration: 5.5s; animation-delay: -2.6s; }

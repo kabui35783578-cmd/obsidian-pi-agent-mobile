@@ -1,10 +1,12 @@
+export const NATIVE_HORIZONTAL_SCROLL = "data-pi-native-horizontal-scroll";
+
 /** Prevent Obsidian's horizontal drawer gesture while the phone view is active. */
 export function installSwipeNavigation(
   target: Window,
   active: () => boolean,
   back: () => void,
 ) {
-  let start: { x: number; y: number; id: number } | undefined;
+  let start: { x: number; y: number; id: number; nativeScroll: boolean } | undefined;
   let direction: "horizontal" | "vertical" | undefined;
   let distance = 0;
   const reset = () => { start = undefined; direction = undefined; distance = 0; };
@@ -12,7 +14,11 @@ export function installSwipeNavigation(
     reset();
     if (!active() || event.touches.length !== 1) return;
     const touch = event.touches[0];
-    start = { x: touch.clientX, y: touch.clientY, id: touch.identifier };
+    const nativeScroll = event.composedPath().some((target) => {
+      const element = target as Partial<Element>;
+      return typeof element.hasAttribute === "function" && element.hasAttribute(NATIVE_HORIZONTAL_SCROLL);
+    });
+    start = { x: touch.clientX, y: touch.clientY, id: touch.identifier, nativeScroll };
   };
   const move = (event: TouchEvent) => {
     if (!start || event.touches.length !== 1) { reset(); return; }
@@ -29,16 +35,17 @@ export function installSwipeNavigation(
       if (!direction) { event.stopImmediatePropagation(); return; }
     }
     if (direction === "horizontal") {
+      // Block the host drawer, while leaving native scrolling enabled inside the timeline.
       distance = dx;
-      if (event.cancelable) event.preventDefault();
+      if (!start.nativeScroll && event.cancelable) event.preventDefault();
       event.stopImmediatePropagation();
     }
   };
   const end = (event: TouchEvent) => {
     if (start && direction === "horizontal") {
-      if (event.cancelable) event.preventDefault();
+      if (!start.nativeScroll && event.cancelable) event.preventDefault();
       event.stopImmediatePropagation();
-      if (Math.abs(distance) >= 60) back();
+      if (!start.nativeScroll && Math.abs(distance) >= 60) back();
     }
     reset();
   };
