@@ -223,7 +223,7 @@ export function renderTodayTimeline(
         setDetail(detailIndex === index ? -1 : index);
         if (detailIndex !== -1) details.scrollIntoView({ block: "nearest", inline: "nearest" });
       }
-      if (scroller.scrollWidth <= scroller.clientWidth) updateFocus(index, true);
+      if (!max) updateFocus(index, 0, true);
       else scroller.scrollTo({ left: points[index].left, behavior: stopMotion?.matches ? "instant" : "smooth" });
     };
     group.addEventListener("click", activate);
@@ -241,6 +241,7 @@ export function renderTodayTimeline(
   let max = 0;
   let frame = 0;
   let viewport = 0;
+  let lastScrollLeft = 0;
 
   function setDetail(index: number) {
     nodes[detailIndex]?.setAttribute("aria-expanded", "false");
@@ -254,9 +255,11 @@ export function renderTodayTimeline(
     detailMeta.setText(item.detail ? status + " · " + item.detail : status);
   }
 
-  function updateFocus(index: number, fits = false) {
+  function updateFocus(index: number, left: number, animate = false) {
+    svg.classList.toggle("has-focus-motion", animate);
     focused = index;
-    const center = fits ? points[index].x : PAD + scroller.scrollLeft / max * span;
+    lastScrollLeft = left;
+    const center = max ? PAD + left / max * span : points[index].x;
     nodes.forEach((node, position) => {
       const strength = Math.max(0, 1 - Math.abs(points[position].x - center) / (viewport * .5));
       node.style.opacity = (.3 + .7 * strength ** 2).toFixed(3);
@@ -277,8 +280,10 @@ export function renderTodayTimeline(
       point.left = Math.round((point.x - PAD) / span * max);
       anchors[index].style.left = point.left + viewport / 2 + "px";
     });
-    scroller.scrollLeft = points[focused].left;
-    updateFocus(focused, !max);
+    const left = points[focused].left;
+    scroller.scrollLeft = left;
+    // Settle the focus immediately on open, refresh and viewport resize.
+    updateFocus(focused, left);
   }
 
   scroller.addEventListener("scroll", () => {
@@ -287,11 +292,12 @@ export function renderTodayTimeline(
       frame = 0;
       if (!max) return;
       const left = scroller.scrollLeft;
+      if (Math.abs(left - lastScrollLeft) < .5) return;
       let closest = 0;
       for (let index = 1; index < points.length; index++) {
         if (Math.abs(points[index].left - left) < Math.abs(points[closest].left - left)) closest = index;
       }
-      updateFocus(closest);
+      updateFocus(closest, left, true);
     });
   }, { passive: true });
   resize();
