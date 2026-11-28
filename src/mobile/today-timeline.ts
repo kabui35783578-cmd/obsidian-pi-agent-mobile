@@ -1,4 +1,3 @@
-import { plainPreview } from "./artifacts.ts";
 import { NATIVE_HORIZONTAL_SCROLL } from "./swipe-navigation.ts";
 
 export interface TodayTimelineItem {
@@ -27,15 +26,7 @@ export function todayTimelineIcon(title: string): TodayTimelineItem["icon"] {
   return "doc";
 }
 
-const segmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter("zh-CN") : undefined;
-
-export function shortTodayTimelineTitle(title: string) {
-  const plain = plainPreview(title).replace(/\s+/g, " ").trim();
-  const parts = segmenter ? Array.from(segmenter.segment(plain), (part) => part.segment) : Array.from(plain);
-  return parts.length > 5 ? parts.slice(0, 4).join("") + "…" : plain || "事项";
-}
-
-const HEIGHT = 162;
+const HEIGHT = 144;
 const PAD = 34;
 const SEED = 20261127;
 const GOLD = "#ffd479";
@@ -69,15 +60,10 @@ function legend(parent: HTMLElement, label: string, color: string, dashed = fals
   item.append(label);
 }
 
-export interface TodayTimelineSelection {
-  focusedKey?: string;
-  detailKey?: string;
-}
-
 let nextTimelineId = 0;
 
 export function renderTodayTimeline(
-  parent: HTMLElement, items: TodayTimelineItem[], previous?: TodayTimelineSelection, emptyText = "暂无事项",
+  parent: HTMLElement, items: TodayTimelineItem[], previousKey?: string, emptyText = "暂无事项",
 ) {
   const panel = parent.createDiv({
     cls: "pi-phone-today-timeline", attr: { [NATIVE_HORIZONTAL_SCROLL]: "" },
@@ -128,17 +114,12 @@ export function renderTodayTimeline(
   const svg = draw(track, "svg", { width, height: HEIGHT, viewBox: "0 0 " + width + " " + HEIGHT, fill: "#fff" });
   const id = "pi-today-timeline-" + ++nextTimelineId;
   const detailId = id + "-detail";
-  const details = panel.createDiv({ cls: "pi-phone-today-timeline-detail", attr: { id: detailId, hidden: "" } });
-  const copy = details.createDiv({ cls: "pi-phone-today-timeline-detail-copy", attr: { "aria-live": "polite" } });
-  const detailTitle = copy.createEl("strong");
-  const detailMeta = copy.createDiv();
-  let detailIndex = -1;
-  const closeDetail = details.createEl("button", { text: "关闭", attr: { type: "button", "aria-label": "关闭事项详情" } });
-  closeDetail.addEventListener("click", () => {
-    const trigger = nodes[detailIndex];
-    setDetail(-1);
-    trigger?.focus({ preventScroll: true });
+  const details = panel.createDiv({
+    cls: "pi-phone-today-timeline-detail",
+    attr: { id: detailId, "aria-live": "polite", "aria-atomic": "true" },
   });
+  const detailTitle = details.createEl("strong");
+  const detailMeta = details.createDiv({ cls: "pi-phone-today-timeline-detail-meta" });
   const doneId = id + "-done";
   const pendingId = id + "-pending";
   const blurId = id + "-blur";
@@ -156,12 +137,12 @@ export function renderTodayTimeline(
   const stars = draw(svg, "g", { fill: "#fff", "aria-hidden": "true" });
   const starRand = random(SEED + 7);
   for (let star = 0; star < Math.floor(width / 34); star++) {
-    draw(stars, "circle", { cx: starRand() * width, cy: 6 + starRand() * (HEIGHT - 60), r: .7 + starRand() * .5, opacity: .2 + starRand() * .3 });
+    draw(stars, "circle", { cx: starRand() * width, cy: 6 + starRand() * (HEIGHT - 42), r: .7 + starRand() * .5, opacity: .2 + starRand() * .3 });
   }
   const drawLines = draw(svg, "g", { fill: "none", "stroke-linecap": "round", "aria-hidden": "true" });
   let donePath = "M" + points[0].x + " " + points[0].y;
   let pendingPath = "M" + latestPoint.x + " " + latestPoint.y;
-  const clampY = (value: number) => Math.max(12, Math.min(HEIGHT - 50, value)).toFixed(1);
+  const clampY = (value: number) => Math.max(12, Math.min(HEIGHT - 32, value)).toFixed(1);
   for (let index = 1; index < points.length; index++) {
     const a = points[index - 1], b = points[index];
     const dx = b.x - a.x, out = dx * (.28 + rand() * .24), into = dx * (.2 + rand() * .26);
@@ -191,11 +172,11 @@ export function renderTodayTimeline(
     const group = draw(svg, "g", {
       class: "pi-phone-today-node", role: "button", tabindex: 0,
       "data-today-focus": "timeline:" + item.key,
-      ...(item.status === "done" ? {} : { "aria-expanded": "false", "aria-controls": detailId }),
+      "aria-controls": detailId,
       "aria-label": item.title + "，" + status + (index === latest ? "，最新完成" : ""),
     });
     draw(group, "title", {}, item.title);
-    draw(group, "rect", { class: "pi-phone-today-node-hit", x: x - 32, y: y - 19, width: 64, height: 163 - y, fill: "transparent" });
+    draw(group, "rect", { class: "pi-phone-today-node-hit", x: x - 32, y: y - 19, width: 64, height: HEIGHT - y + 19, fill: "transparent" });
     draw(group, "path", { d: "M" + x + " " + (y + 18) + "V122", fill: "none", stroke: "#fff", "stroke-opacity": .14, "stroke-dasharray": "1 3", "stroke-linecap": "round" });
     const badge = draw(group, "g", { class: "pi-phone-today-node-badge is-float-" + (index % 5) });
     const circle = { cx: x, cy: y, r: 15 };
@@ -217,12 +198,8 @@ export function renderTodayTimeline(
       draw(group, "text", { x, y: y - 29.5, "font-size": 10, "font-weight": 700 }, "最新");
     }
     draw(group, "text", { x, y: 136, "font-size": 11, "font-weight": isPending ? 700 : 500, fill: isPending ? GOLD : "#ffffffc7" }, status);
-    draw(group, "text", { x, y: 154, "font-size": 12.5, "font-weight": 600 }, shortTodayTimelineTitle(item.title));
     const activate = () => {
-      if (item.status !== "done") {
-        setDetail(detailIndex === index ? -1 : index);
-        if (detailIndex !== -1) details.scrollIntoView({ block: "nearest", inline: "nearest" });
-      }
+      details.scrollIntoView({ block: "nearest", inline: "nearest" });
       if (!max) updateFocus(index, 0, true);
       else scroller.scrollTo({ left: points[index].left, behavior: stopMotion?.matches ? "instant" : "smooth" });
     };
@@ -236,27 +213,21 @@ export function renderTodayTimeline(
   });
 
   const anchors = points.map(() => track.createSpan({ cls: "pi-phone-today-timeline-snap", attr: { "aria-hidden": "true" } }));
-  let focused = items.findIndex((item) => item.key === previous?.focusedKey);
+  let focused = items.findIndex((item) => item.key === previousKey);
   if (focused === -1) focused = initial;
   let max = 0;
   let frame = 0;
   let viewport = 0;
   let lastScrollLeft = 0;
 
-  function setDetail(index: number) {
-    nodes[detailIndex]?.setAttribute("aria-expanded", "false");
-    detailIndex = index;
-    const item = items[index];
-    details.hidden = !item;
-    if (!item) return;
-    nodes[index].setAttribute("aria-expanded", "true");
-    detailTitle.setText(item.title);
-    const status = item.status === "pending" ? "待办" : "进行中";
-    detailMeta.setText(item.detail ? status + " · " + item.detail : status);
-  }
-
   function updateFocus(index: number, left: number, animate = false) {
     svg.classList.toggle("has-focus-motion", animate);
+    if (focused !== index || !detailTitle.textContent) {
+      const item = items[index];
+      const status = item.status === "done" ? "已完成" : item.status === "pending" ? "待办" : "进行中";
+      detailTitle.setText(item.title || "事项");
+      detailMeta.setText([status, item.time, item.detail].filter(Boolean).join(" · "));
+    }
     focused = index;
     lastScrollLeft = left;
     const center = max ? PAD + left / max * span : points[index].x;
@@ -301,15 +272,10 @@ export function renderTodayTimeline(
     });
   }, { passive: true });
   resize();
-  const restored = items.findIndex((item) => item.status !== "done" && item.key === previous?.detailKey);
-  if (restored !== -1) setDetail(restored);
   const observer = new ResizeObserver(resize);
   observer.observe(scroller);
   return {
-    selection: (): TodayTimelineSelection => ({
-      focusedKey: focused === initial ? undefined : items[focused].key,
-      detailKey: items[detailIndex]?.key,
-    }),
+    selectedKey: () => focused === initial ? undefined : items[focused].key,
     dispose: () => {
       observer.disconnect();
       cancelAnimationFrame(frame);

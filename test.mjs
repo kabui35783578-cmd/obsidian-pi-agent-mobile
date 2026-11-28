@@ -70,14 +70,6 @@ test("shipped stylesheet includes the current phone styles", async () => {
     .replace(data[0], "./assets/dm-sans-latin.woff2"), phone);
 });
 
-test("Today timeline titles fit one short line and preserve whole characters", async () => {
-  const { shortTodayTimelineTitle } = await import("./src/mobile/today-timeline.ts");
-  assert.equal(shortTodayTimelineTitle("小红书发布"), "小红书发布");
-  assert.equal(shortTodayTimelineTitle("**今天下班以后剪完门店宣传视频**"), "今天下班…");
-  assert.equal(shortTodayTimelineTitle("👩‍💻准备发布公告"), "👩‍💻准备发…");
-  assert.equal(shortTodayTimelineTitle(" "), "事项");
-});
-
 test("a saved streamed stage clears the mobile buffer before the next reply", async () => {
   const { build } = await import("esbuild");
   const output = await build({

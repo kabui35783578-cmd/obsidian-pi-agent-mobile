@@ -3,9 +3,9 @@ import { iconButton, toolLabel } from "../plugin/ui-elements.ts";
 import type { Conversation, ConversationSummary } from "../shared/types.ts";
 import { safeRemoteMarkdown } from "./artifacts.ts";
 import type { MobileClient } from "./client.ts";
-import { TodayActivityIndex, type TodayActivity, type TodayResult, type TodayTodo, type TodayTodos } from "./today-data.ts";
+import { TodayActivityIndex, type TodayActivity, type TodayResult, type TodayRunning, type TodayTodo, type TodayTodos } from "./today-data.ts";
 
-import { renderTodayTimeline, todayTimelineIcon, type TodayTimelineItem, type TodayTimelineSelection } from "./today-timeline.ts";
+import { renderTodayTimeline, todayTimelineIcon, type TodayTimelineItem } from "./today-timeline.ts";
 
 const formatTimelineTime = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -260,11 +260,11 @@ export class PhoneToday {
     const active = body.ownerDocument.activeElement;
     const focus = active && body.contains(active) ? active.getAttribute("data-today-focus") : undefined;
     const scrollTop = body.scrollTop;
-    const timelineSelection = this.timeline?.selection();
+    const selectedNode = this.timeline?.selectedKey();
     this.clearHero();
     body.empty();
     this.title?.setText("今天");
-    this.renderHero(body, timelineSelection);
+    this.renderHero(body, selectedNode);
     const notice = (text: string) => body.createEl("p", { cls: "pi-phone-today-notice", text, attr: { role: "status" } });
     if (!this.client.connected)
       notice(this.todos || this.activity ? "电脑离线 · 显示上次读取的内容" : "连接电脑后查看今天的待办和进展");
@@ -321,9 +321,7 @@ export class PhoneToday {
     if (this.activity?.running.length) {
       const list = running.createDiv({ cls: "pi-today-card" });
       for (const item of this.activity.running) {
-        const status = item.step?.status === "completed" ? "刚完成" : item.step?.status === "failed" ? "上一步未完成：" : "正在";
-        const progress = item.step ? status + toolLabel(item.step.name) : "正在处理";
-        this.row(list, item.title, this.agentName(item.agentId) + " · " + progress, "clock-3",
+        this.row(list, item.title, this.runningDetail(item), "clock-3",
           item.conversationId, () => this.openChat(item.conversationId), this.client.connected);
       }
     } else empty(running, this.activity && !this.activity.partial ? "当前没有进行中的任务" :
@@ -337,7 +335,7 @@ export class PhoneToday {
     }
   }
 
-  private renderHero(body: HTMLElement, timelineSelection?: TodayTimelineSelection) {
+  private renderHero(body: HTMLElement, selectedNode?: string) {
     const now = new Date();
     const day = this.todos?.date ? new Date(this.todos.date + "T12:00:00") : now;
     const hero = body.createDiv({ cls: "pi-phone-today-hero" });
@@ -387,11 +385,11 @@ export class PhoneToday {
       items.push({
         key: "result:" + item.conversationId + ":" + item.at, title: item.title,
         status: "done", time: Number.isNaN(date.getTime()) ? undefined : formatTimelineTime.format(date),
-        icon: todayTimelineIcon(item.title),
+        icon: todayTimelineIcon(item.title), detail: item.note || this.agentName(item.agentId),
       });
     }
     for (const item of this.activity?.running ?? []) {
-      items.push({ key: "running:" + item.conversationId, title: item.title, status: "running", icon: "clock", detail: this.agentName(item.agentId) });
+      items.push({ key: "running:" + item.conversationId, title: item.title, status: "running", icon: "clock", detail: this.runningDetail(item) });
     }
     for (const item of this.todos?.items ?? []) {
       items.push({ key: "pending:" + item.id, title: item.text, status: "pending", icon: todayTimelineIcon(item.text), detail: item.note });
@@ -399,7 +397,7 @@ export class PhoneToday {
     const emptyText = !this.client.connected ? "连接电脑后查看时间线" :
       this.todosError || this.activityError || this.todos?.warnings || this.activity?.partial ? "部分事项未能读取" :
       !this.activity || (this.client.description?.mobileTodayTodos && !this.todos) ? "正在读取今天的事项…" : "今天暂无事项";
-    this.timeline = renderTodayTimeline(hero, items, timelineSelection, emptyText);
+    this.timeline = renderTodayTimeline(hero, items, selectedNode, emptyText);
   }
 
   private row(parent: HTMLElement, title: string, detail: string, icon: string, key: string, open: () => void, enabled = true) {
@@ -412,6 +410,12 @@ export class PhoneToday {
     copy.createSpan({ cls: "pi-phone-today-meta", text: detail });
     setIcon(row.createSpan({ cls: "pi-phone-today-chevron", attr: { "aria-hidden": "true" } }), "chevron-right");
     row.addEventListener("click", open);
+  }
+
+  private runningDetail(item: TodayRunning) {
+    const status = item.step?.status === "completed" ? "刚完成" : item.step?.status === "failed" ? "上一步未完成：" : "正在";
+    const progress = item.step ? status + toolLabel(item.step.name) : "正在处理";
+    return this.agentName(item.agentId) + " · " + progress;
   }
 
   private agentName(id: string) {
