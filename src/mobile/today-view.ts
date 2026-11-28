@@ -25,6 +25,8 @@ export class PhoneToday {
   private activityTimer?: ReturnType<typeof setTimeout>;
   private pending = new Set<string>();
   private entryLabel?: HTMLElement;
+  private entryDay?: HTMLElement;
+  private entryTime?: HTMLTimeElement;
   private entryButton?: HTMLButtonElement;
   private screen?: HTMLElement;
   private body?: HTMLElement;
@@ -50,10 +52,13 @@ export class PhoneToday {
       attr: { type: "button" },
     });
     const avatar = button.createSpan({ cls: "pi-agent-avatar pi-phone-today-avatar", attr: { "aria-hidden": "true" } });
-    setIcon(avatar.createSpan(), "calendar-days");
+    avatar.createSpan({ cls: "pi-phone-today-entry-face" });
+    this.entryDay = avatar.createSpan({ cls: "pi-phone-today-entry-day" });
     const body = button.createDiv({ cls: "pi-phone-contact-body" });
-    body.createDiv({ cls: "pi-phone-contact-title" }).createEl("strong", { text: "今天" });
-    this.entryLabel = body.createDiv({ cls: "pi-phone-contact-preview" }).createSpan();
+    const title = body.createDiv({ cls: "pi-phone-contact-title" });
+    title.createEl("strong", { text: "今天" });
+    this.entryTime = title.createEl("time", { attr: { hidden: "" } });
+    this.entryLabel = body.createDiv({ cls: "pi-phone-contact-preview" });
     button.addEventListener("click", () => this.open());
     this.entryButton = button;
     this.renderEntry();
@@ -230,15 +235,38 @@ export class PhoneToday {
 
   private renderEntry() {
     const label = this.entryLabel;
-    if (!label) return;
+    if (!label || !this.entryDay || !this.entryTime) return;
+
+    const day = String(this.todayDate().getDate());
+    if (this.entryDay.textContent !== day) this.entryDay.setText(day);
+
+    const latest = this.activity?.results[0]?.at;
+    const latestDate = latest ? new Date(latest) : undefined;
+    const time = latestDate && !Number.isNaN(latestDate.getTime()) ? formatTimelineTime.format(latestDate) : "";
+    if (this.entryTime.textContent !== time) this.entryTime.setText(time);
+    this.entryTime.dateTime = time && latest ? latest : "";
+    this.entryTime.hidden = !time;
+
     const parts = [
-      this.todos?.total ? this.todos.total + " 项待办" : "",
-      this.activity?.results.length ? this.activity.results.length + " 条结果" : "",
-      this.activity?.running.length ? this.activity.running.length + " 项进行中" : "",
-    ].filter(Boolean);
-    const text = parts.slice(0, 2).join(" · ") || (!this.client.connected ? "电脑未连接" :
-      this.todos && this.activity && !this.todosError && !this.todos.warnings && !this.activityError && !this.activity.partial ? "暂无新事项" : "查看待办和进展");
-    if (label.textContent !== text) label.setText(text);
+      { kind: "pending", count: this.todos?.total, unit: "项待办" },
+      { kind: "results", count: this.activity?.results.length, unit: "条结果" },
+      { kind: "running", count: this.activity?.running.length, unit: "项进行中" },
+    ].filter((part) => part.count).slice(0, 2);
+    const text = parts.map(({ count, unit }) => count + " " + unit).join(" · ") ||
+      (!this.client.connected ? "电脑未连接" :
+        this.todos && this.activity && !this.todosError && !this.todos.warnings && !this.activityError && !this.activity.partial ? "暂无新事项" : "查看待办和进展");
+    if (label.textContent === text) return;
+    label.empty();
+    if (!parts.length) label.createSpan({ text });
+    parts.forEach(({ kind, count, unit }, index) => {
+      if (index) label.createSpan({ text: " · ", attr: { "aria-hidden": "true" } });
+      label.createSpan({ cls: "pi-phone-today-entry-metric", text: count + " " + unit, attr: { "data-kind": kind } });
+    });
+  }
+
+  private todayDate() {
+    const parsed = this.todos?.date ? new Date(this.todos.date + "T12:00:00") : undefined;
+    return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
   }
 
   private clearHero() {
@@ -336,8 +364,7 @@ export class PhoneToday {
   }
 
   private renderHero(body: HTMLElement, selectedNode?: string) {
-    const now = new Date();
-    const day = this.todos?.date ? new Date(this.todos.date + "T12:00:00") : now;
+    const day = this.todayDate();
     const hero = body.createDiv({ cls: "pi-phone-today-hero" });
     if (this.animateHero) {
       hero.addClass("is-entering");

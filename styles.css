@@ -4491,21 +4491,55 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   .pi-phone-sheet-container .pi-phone-modal { animation: none; }
   .pi-phone-view :is(button.pi-phone-round, button.pi-phone-identity, button.pi-phone-favorite) { transition: none; }
 }
+.pi-phone-home .pi-phone-recent > .pi-phone-today-entry { gap: 16px; }
+.pi-phone-today-entry .pi-phone-contact-title strong { font-weight: 700; }
+.pi-phone-today-entry .pi-phone-contact-title time { font-variant-numeric: tabular-nums; }
 .pi-phone-contact > .pi-phone-today-avatar {
-  display: flex;
-  align-items: stretch;
-  box-sizing: border-box;
-  padding: 3px;
+  position: relative;
+  overflow: visible;
 }
-.pi-phone-today-avatar > span {
+.pi-phone-today-entry-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 48px;
+  height: 48px;
+  border-radius: 17px;
+  background: radial-gradient(90% 90% at 27% 17%, #a2a5f9, #605ae2 66%, #403bc6 100%);
+  box-shadow: 0 8px 16px #4a45c455, inset 0 1px 2px #ffffff80;
+}
+.pi-phone-today-entry-day {
+  position: absolute;
   display: grid;
   place-items: center;
-  flex: 1;
-  border-radius: 44% 48% 43% 47%;
-  background: color-mix(in srgb, var(--pi-running) 18%, var(--pi-canvas));
-  color: color-mix(in srgb, var(--pi-running) 62%, var(--pi-ink));
+  inset: auto 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--pi-line);
+  border-radius: 50%;
+  background: var(--pi-canvas);
+  color: var(--pi-running);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
-.pi-phone-today-avatar svg { width: 24px; height: 24px; }
+.pi-phone-today-entry-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.pi-phone-today-entry-metric::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--pi-running);
+}
+.pi-phone-today-entry-metric[data-kind="pending"]::before { background: #d99a20; }
 .pi-phone-today-icon,
 .pi-phone-today-check { display: grid; flex: none; color: var(--pi-secondary); }
 .pi-phone-today-icon svg,
@@ -4711,7 +4745,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   box-shadow: inset 0 -4px 8px #14288c59;
 }
 .pi-phone-today-hero-face::before,
-.pi-phone-today-hero-face::after {
+.pi-phone-today-hero-face::after,
+.pi-phone-today-entry-face::before,
+.pi-phone-today-entry-face::after {
   width: 5px;
   height: 14px;
   border-radius: 3px;
@@ -4719,6 +4755,8 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   rotate: -8deg;
   content: "";
 }
+.pi-phone-today-entry-face::before,
+.pi-phone-today-entry-face::after { height: 10px; }
 .pi-phone-today-stats {
   display: flex;
   flex-wrap: wrap;
