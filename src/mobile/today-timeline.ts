@@ -29,7 +29,9 @@ export function todayTimelineIcon(title: string): TodayTimelineItem["icon"] {
 const HEIGHT = 144;
 const PAD = 34;
 const SEED = 20261127;
-const GOLD = "#ffd479";
+const INK = "var(--pi-today-ink)";
+const PENDING = "var(--pi-today-pending)";
+const WASH = "var(--pi-today-wash)";
 
 function random(seed: number) {
   return () => {
@@ -70,8 +72,8 @@ export function renderTodayTimeline(
   });
   const footer = panel.createDiv({ cls: "pi-phone-today-timeline-footer" });
   const labels = footer.createDiv({ cls: "pi-phone-today-timeline-legend" });
-  legend(labels, "已完成", "#fff");
-  legend(labels, "待办", GOLD, true);
+  legend(labels, "已完成", INK);
+  legend(labels, "待办", PENDING, true);
   const hint = footer.createSpan({ text: "左右滑动 →" });
   hint.hidden = true;
   if (!items.length) {
@@ -111,7 +113,7 @@ export function renderTodayTimeline(
   });
 
   track.style.width = width + "px";
-  const svg = draw(track, "svg", { width, height: HEIGHT, viewBox: "0 0 " + width + " " + HEIGHT, fill: "#fff" });
+  const svg = draw(track, "svg", { width, height: HEIGHT, viewBox: "0 0 " + width + " " + HEIGHT, fill: INK });
   const id = "pi-today-timeline-" + ++nextTimelineId;
   const detailId = id + "-detail";
   const details = panel.createDiv({
@@ -125,16 +127,16 @@ export function renderTodayTimeline(
   const blurId = id + "-blur";
   const defs = draw(svg, "defs");
   const done = draw(defs, "linearGradient", { id: doneId, gradientUnits: "userSpaceOnUse", x1: PAD, x2: Math.max(PAD + 1, latestPoint.x) });
-  draw(done, "stop", { offset: 0, "stop-color": "#fff", "stop-opacity": .12 });
-  draw(done, "stop", { offset: .55, "stop-color": "#fff", "stop-opacity": .6 });
-  draw(done, "stop", { offset: 1, "stop-color": "#fff" });
+  draw(done, "stop", { offset: 0, "stop-color": INK, "stop-opacity": .12 });
+  draw(done, "stop", { offset: .55, "stop-color": INK, "stop-opacity": .6 });
+  draw(done, "stop", { offset: 1, "stop-color": INK });
   const pending = draw(defs, "linearGradient", { id: pendingId, gradientUnits: "userSpaceOnUse", x1: latestPoint.x, x2: Math.max(latestPoint.x + 1, last.x) });
-  draw(pending, "stop", { offset: 0, "stop-color": "#fff" });
-  draw(pending, "stop", { offset: 1, "stop-color": GOLD });
+  draw(pending, "stop", { offset: 0, "stop-color": INK });
+  draw(pending, "stop", { offset: 1, "stop-color": PENDING });
   const blur = draw(defs, "filter", { id: blurId, x: "-5%", y: "-60%", width: "110%", height: "220%" });
   draw(blur, "feGaussianBlur", { stdDeviation: 3 });
 
-  const stars = draw(svg, "g", { fill: "#fff", "aria-hidden": "true" });
+  const stars = draw(svg, "g", { fill: INK, "aria-hidden": "true" });
   const starRand = random(SEED + 7);
   for (let star = 0; star < Math.floor(width / 34); star++) {
     draw(stars, "circle", { cx: starRand() * width, cy: 6 + starRand() * (HEIGHT - 42), r: .7 + starRand() * .5, opacity: .2 + starRand() * .3 });
@@ -162,9 +164,9 @@ export function renderTodayTimeline(
   }
 
   const ripple = draw(svg, "g", { class: "pi-phone-today-ripple", "aria-hidden": "true" });
-  const rings = draw(ripple, "g", { fill: "none", stroke: "#fff" });
+  const rings = draw(ripple, "g", { fill: "none", stroke: INK });
   draw(rings, "circle", { r: 21, "stroke-opacity": .35 });
-  draw(rings, "circle", { r: 28, "stroke-opacity": .16, fill: "#ffffff1a" });
+  draw(rings, "circle", { r: 28, "stroke-opacity": .16, fill: WASH });
   const stopMotion = parent.ownerDocument.defaultView?.matchMedia("(prefers-reduced-motion: reduce)");
   const nodes = points.map(({ item, x, y }, index) => {
     const isPending = item.status === "pending";
@@ -177,27 +179,28 @@ export function renderTodayTimeline(
     });
     draw(group, "title", {}, item.title);
     draw(group, "rect", { class: "pi-phone-today-node-hit", x: x - 32, y: y - 19, width: 64, height: HEIGHT - y + 19, fill: "transparent" });
-    draw(group, "path", { d: "M" + x + " " + (y + 18) + "V122", fill: "none", stroke: "#fff", "stroke-opacity": .14, "stroke-dasharray": "1 3", "stroke-linecap": "round" });
+    draw(group, "path", { d: "M" + x + " " + (y + 18) + "V122", fill: "none", stroke: INK, "stroke-opacity": .14, "stroke-dasharray": "1 3", "stroke-linecap": "round" });
     const badge = draw(group, "g", { class: "pi-phone-today-node-badge is-float-" + (index % 5) });
     const circle = { cx: x, cy: y, r: 15 };
-    draw(badge, "circle", { ...circle, fill: "#2d36a6" });
+    draw(badge, "circle", { ...circle, fill: "var(--pi-today-node-surface)" });
     draw(badge, "circle", {
-      ...circle, fill: isPending ? "#ffd4791a" : "#ffffff1f", stroke: isPending ? GOLD : "#ffffff99",
+      ...circle, fill: isPending ? "color-mix(in srgb, var(--pi-today-pending-disc) 15%, transparent)" : WASH,
+      stroke: isPending ? PENDING : INK, "stroke-opacity": isPending ? 1 : .6,
       ...(isPending ? { "stroke-dasharray": "2 2.5" } : {}),
     });
     const icon = {
       d: icons[item.icon], transform: "translate(" + x + " " + y + ") scale(.78) translate(-12 -12)",
       fill: "none", "stroke-width": 2.2, "stroke-linecap": "round", "stroke-linejoin": "round",
     };
-    draw(badge, "path", { ...icon, stroke: isPending ? GOLD : "#fff" });
+    draw(badge, "path", { ...icon, stroke: isPending ? PENDING : INK });
     const selected = draw(badge, "g", { class: "pi-phone-today-node-selected" });
-    draw(selected, "circle", { ...circle, fill: isPending ? GOLD : "#fff" });
-    draw(selected, "path", { ...icon, stroke: isPending ? "#3b2a00" : "#2a2f9c" });
+    draw(selected, "circle", { ...circle, fill: isPending ? "var(--pi-today-pending-disc)" : INK });
+    draw(selected, "path", { ...icon, stroke: isPending ? "#3b2a00" : "var(--pi-today-node-ink)" });
     if (index === latest) {
-      draw(group, "rect", { x: x - 15, y: y - 41, width: 30, height: 16, rx: 8, fill: "#ffffff38", stroke: "#ffffff59" });
+      draw(group, "rect", { x: x - 15, y: y - 41, width: 30, height: 16, rx: 8, fill: WASH, stroke: "var(--pi-today-edge)" });
       draw(group, "text", { x, y: y - 29.5, "font-size": 10, "font-weight": 700 }, "最新");
     }
-    draw(group, "text", { x, y: 136, "font-size": 11, "font-weight": isPending ? 700 : 500, fill: isPending ? GOLD : "#ffffffc7" }, status);
+    draw(group, "text", { x, y: 136, "font-size": 11, "font-weight": isPending ? 700 : 500, fill: isPending ? PENDING : "var(--pi-today-secondary)" }, status);
     const activate = () => {
       details.scrollIntoView({ block: "nearest", inline: "nearest" });
       if (!max) updateFocus(index, 0, true);

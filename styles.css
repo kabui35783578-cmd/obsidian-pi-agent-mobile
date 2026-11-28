@@ -4517,18 +4517,19 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   z-index: 6;
   display: flex;
   flex-direction: column;
-  --pi-canvas: #0d0d12;
-  --pi-ink: #fff;
-  --pi-line: #ffffff17;
-  --pi-surface: #18181f;
-  --pi-secondary: #8e8e99;
-  --pi-hover: #ffffff0e;
-  --pi-today-gold: #ffd479;
+  --pi-today-task-ink: #795006;
+  --pi-today-task-bg: #fff1d5;
+  --pi-today-task-line: #e9d2a5;
   --pi-today-font: "Pi Today DM Sans", -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   color: var(--pi-ink);
-  background: radial-gradient(120% 50% at 50% 0%, #1a1c33 0%, #0d0d12 70%);
+  background: var(--pi-canvas);
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   line-height: normal;
+}
+.theme-dark .pi-phone-today-screen {
+  --pi-today-task-ink: #ffd479;
+  --pi-today-task-bg: #ffd4791f;
+  --pi-today-task-line: #ffd47940;
 }
 .pi-phone-view.is-today-open > :not(.pi-phone-today-screen) { visibility: hidden; }
 .pi-phone-today-header {
@@ -4541,12 +4542,6 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   padding: 0 16px;
   flex: none;
 }
-.pi-phone-view .pi-phone-today-header button.pi-phone-round {
-  background: #ffffff0f;
-  border: 1px solid #ffffff1a;
-  color: #fff;
-}
-.pi-phone-view .pi-phone-today-header button.pi-phone-round:active { background: #ffffff20; }
 .pi-phone-today-header h1 {
   margin: 0;
   color: var(--pi-ink);
@@ -4575,8 +4570,8 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
 .pi-phone-today-task-count {
   padding: 2px 8px;
   border-radius: 10px;
-  background: #ffd47924;
-  color: var(--pi-today-gold);
+  background: var(--pi-today-task-bg);
+  color: var(--pi-today-task-ink);
   font-size: 11px;
 }
 .pi-phone-today-empty,
@@ -4618,24 +4613,45 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
 }
 .pi-phone-today-hero {
   --pi-today-card-inset: 22px;
+  --pi-today-ink: #202d68;
+  --pi-today-secondary: #435184;
+  --pi-today-pending: #795006;
+  --pi-today-node-surface: #dfe8ff;
+  --pi-today-node-ink: #fff;
+  --pi-today-pending-disc: #ffd479;
+  --pi-today-wash: #233c8c12;
+  --pi-today-edge: #233c8c30;
   position: relative;
   overflow: hidden;
   isolation: isolate;
   margin-block-end: 22px;
   padding: 20px 0 12px;
-  border: 1px solid #ffffff29;
+  border: 1px solid var(--pi-today-edge);
   border-radius: 32px;
+  background: radial-gradient(90% 70% at 90% 0%, #b6caff, transparent 65%),
+    linear-gradient(160deg, #eef4ff, #dce7ff);
+  box-shadow: 0 20px 38px -24px #536ab76e;
+  color: var(--pi-today-ink);
+}
+.theme-dark .pi-phone-today-hero {
+  --pi-today-ink: #fff;
+  --pi-today-secondary: #e3e7ff;
+  --pi-today-pending: #ffd479;
+  --pi-today-node-surface: #2d36a6;
+  --pi-today-node-ink: #2a2f9c;
+  --pi-today-wash: #ffffff24;
+  --pi-today-edge: #ffffff29;
+  --pi-today-date-fill: linear-gradient(180deg, #fff 30%, #bcc6ff);
   background: radial-gradient(90% 70% at 90% 0%, #7a8cff8c, transparent 65%),
     linear-gradient(160deg, #3d49c9 0%, #2a2f9c 55%, #1c2073 100%);
   box-shadow: 0 24px 50px -22px #5064ffb3, inset 0 1px #ffffff47;
-  color: #fff;
 }
 .pi-phone-today-hero::before,
 .pi-phone-today-hero::after {
   position: absolute;
   z-index: -1;
   box-sizing: content-box;
-  border: 1px solid #ffffff17;
+  border: 1px solid var(--pi-today-wash);
   border-radius: 50%;
   content: "";
   pointer-events: none;
@@ -4651,16 +4667,16 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
 .pi-phone-today-date { display: grid; justify-items: start; gap: 8px; }
 .pi-phone-today-day-label {
   padding: 4px 10px;
-  border: 1px solid #ffffff24;
+  border: 1px solid var(--pi-today-wash);
   border-radius: 12px;
-  background: #ffffff24;
-  color: #ffffffe6;
+  background: var(--pi-today-wash);
+  color: var(--pi-today-ink);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 1.5px;
 }
 .pi-phone-today-day-number {
-  background: linear-gradient(180deg, #fff 30%, #bcc6ff);
+  background: var(--pi-today-date-fill, var(--pi-today-ink));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -4677,9 +4693,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   width: 72px;
   height: 72px;
   margin-top: 4px;
-  border: 1px solid #ffffff38;
+  border: 1px solid var(--pi-today-edge);
   border-radius: 50%;
-  background: #ffffff14;
+  background: var(--pi-today-wash);
   box-shadow: 0 0 40px #78a0ff73;
   flex: none;
 }
@@ -4718,21 +4734,21 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   padding: 5px 11px;
   border: 0;
   border-radius: 12px;
-  background: #ffffff29;
+  background: var(--pi-today-wash);
   box-shadow: none;
-  color: #fff;
+  color: var(--pi-today-ink);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 .pi-phone-view .pi-phone-today-stats > [data-kind="tasks"] {
-  background: #ffd4792e;
-  color: var(--pi-today-gold);
+  background: color-mix(in srgb, var(--pi-today-pending-disc) 25%, transparent);
+  color: var(--pi-today-pending);
 }
 .pi-phone-view .pi-phone-today-stats > [data-kind="running"] {
-  background: #ffffff14;
-  color: #ffffffc7;
+  background: var(--pi-today-wash);
+  color: var(--pi-today-secondary);
 }
 .pi-phone-view .pi-phone-today-stats > button:active { filter: brightness(1.27); }
 .pi-phone-today-stat-number { font-variant-numeric: tabular-nums; }
@@ -4765,7 +4781,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   min-height: 144px;
   display: grid;
   place-items: center;
-  color: #ffffffc7;
+  color: var(--pi-today-secondary);
   font-size: 12px;
 }
 .pi-phone-today-timeline-footer,
@@ -4775,19 +4791,19 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
   justify-content: space-between;
   gap: 8px;
   padding-inline: var(--pi-today-card-inset);
-  color: #ffffffc7;
+  color: var(--pi-today-secondary);
   font-size: 11px;
 }
 .pi-phone-today-timeline-detail {
   margin: 10px var(--pi-today-card-inset) 0;
   padding: 10px 12px;
-  border: 1px solid #ffffff1f;
+  border: 1px solid var(--pi-today-edge);
   border-radius: 14px;
-  background: #ffffff0f;
+  background: var(--pi-today-wash);
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-.pi-phone-today-timeline-detail-meta { margin-top: 4px; color: #ffffffe6; font-size: 11px; }
+.pi-phone-today-timeline-detail-meta { margin-top: 4px; color: var(--pi-today-secondary); font-size: 11px; }
 .pi-phone-today-timeline-legend { gap: 14px; }
 .pi-phone-today-timeline-legend > span { gap: 6px; white-space: nowrap; }
 .pi-phone-today-node {
@@ -4802,7 +4818,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
 }
 .pi-phone-today-node:focus { outline: none; }
 .pi-phone-today-node:focus-visible { opacity: 1 !important; }
-.pi-phone-today-node:focus-visible .pi-phone-today-node-hit { stroke: #fff; stroke-dasharray: 2 2; }
+.pi-phone-today-node:focus-visible .pi-phone-today-node-hit { stroke: var(--pi-today-ink); stroke-dasharray: 2 2; }
 .pi-phone-today-node-selected { opacity: 0; }
 .pi-phone-today-node.is-focused .pi-phone-today-node-selected { opacity: 1; }
 @media (prefers-reduced-motion: no-preference) {
@@ -4824,7 +4840,7 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
 .pi-phone-today-group h2 { scroll-margin-top: 8px; }
 .pi-phone-today-screen .pi-today-card {
   border-radius: 22px;
-  background: linear-gradient(180deg, #1a1a22, #15151b);
+  background: var(--pi-surface);
 }
 .pi-phone-view .pi-phone-today-screen .pi-today-item { gap: 14px; padding: 14px; }
 .pi-phone-today-screen .pi-phone-today-chevron { display: flex; color: var(--pi-secondary); }
@@ -4839,9 +4855,9 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-collaboration-inline { inset: 
 }
 .pi-phone-today-task .pi-phone-today-meta { min-height: 25px; }
 .pi-phone-today-task .pi-phone-today-check {
-  border: 1px solid #ffd47940;
-  background: #ffd4791f;
-  color: var(--pi-today-gold);
+  border: 1px solid var(--pi-today-task-line);
+  background: var(--pi-today-task-bg);
+  color: var(--pi-today-task-ink);
 }
 .pi-phone-today-check svg { width: 22px; height: 22px; }
 .pi-phone-today-group[data-kind="results"] .pi-phone-today-icon {
