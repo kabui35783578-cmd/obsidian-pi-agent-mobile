@@ -5,6 +5,9 @@ import { safeRemoteMarkdown } from "./artifacts.ts";
 import type { MobileClient } from "./client.ts";
 import { TodayActivityIndex, type TodayActivity, type TodayResult, type TodayTodo, type TodayTodos } from "./today-data.ts";
 
+import { renderTodayTimeline, todayTimelineIcon, type TodayTimelineItem } from "./today-timeline.ts";
+
+const formatTimelineTime = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 export class PhoneToday {
@@ -30,6 +33,7 @@ export class PhoneToday {
   private detail?: Component;
   private lastListTop = 0;
   private animateHero = false;
+  private timeline?: ReturnType<typeof renderTodayTimeline>;
 
   constructor(
     private root: HTMLElement,
@@ -37,7 +41,6 @@ export class PhoneToday {
     private client: MobileClient,
     private openChat: (id: string) => void,
     private openNote: (path: string, agentId: string) => void,
-    private renderAvatar: (parent: HTMLElement) => void,
   ) {}
 
   entry(parent: HTMLElement) {
@@ -112,6 +115,7 @@ export class PhoneToday {
 
   close(restoreFocus = true) {
     this.clearDetail();
+    this.clearTimeline();
     this.screen?.remove();
     this.screen = this.body = this.title = this.back = undefined;
     this.root.removeClass("is-today-open");
@@ -148,6 +152,7 @@ export class PhoneToday {
     this.todos = this.activity = undefined;
     this.todosError = this.activityError = this.writeError = "";
     this.pending.clear();
+    this.clearTimeline();
     this.clearDetail();
   }
 
@@ -235,6 +240,11 @@ export class PhoneToday {
     if (label.textContent !== text) label.setText(text);
   }
 
+  private clearTimeline() {
+    this.timeline?.dispose();
+    this.timeline = undefined;
+  }
+
   private render() {
     this.renderEntry();
     const body = this.body;
@@ -245,18 +255,21 @@ export class PhoneToday {
       return;
     }
     const active = body.ownerDocument.activeElement;
-    const focus = active instanceof HTMLElement && body.contains(active) ? active.dataset.todayFocus : undefined;
+    const focus = active && body.contains(active) ? active.getAttribute("data-today-focus") : undefined;
     const scrollTop = body.scrollTop;
+    const selectedNode = this.timeline?.selectedKey();
+    this.clearTimeline();
     body.empty();
     this.title?.setText("今天");
-    this.renderHero(body);
+    this.renderHero(body, selectedNode);
     const notice = (text: string) => body.createEl("p", { cls: "pi-phone-today-notice", text, attr: { role: "status" } });
     if (!this.client.connected)
       notice(this.todos || this.activity ? "电脑离线 · 显示上次读取的内容" : "连接电脑后查看今天的待办和进展");
     if (this.writeError) notice(this.writeError);
     const section = (label: string, kind: string) => {
       const area = body.createEl("section", { cls: "pi-phone-today-group", attr: { "data-kind": kind } });
-      area.createEl("h2", { text: label, attr: { "data-today-focus": kind + ":heading" } });
+      const heading = area.createEl("h2", { text: label, attr: { "data-today-focus": kind + ":heading" } });
+      if (kind === "tasks" && this.todos) heading.createSpan({ cls: "pi-phone-today-task-count", text: String(this.todos.total) });
       return area;
     };
     const empty = (area: HTMLElement, text: string) => area.createEl("p", { cls: "pi-phone-today-empty", text });
@@ -271,10 +284,11 @@ export class PhoneToday {
         const row = list.createEl("button", { cls: "pi-today-item pi-phone-today-task", attr: { type: "button" } });
         row.dataset.todayFocus = item.id;
         row.disabled = waiting || !this.client.connected || !this.todos.canComplete;
-        setIcon(row.createSpan({ cls: "pi-phone-today-check", attr: { "aria-hidden": "true" } }), waiting ? "loader-circle" : "square");
+        setIcon(row.createSpan({ cls: "pi-phone-today-check", attr: { "aria-hidden": "true" } }), waiting ? "loader-circle" : todayTimelineIcon(item.text) === "video" ? "video" : "file-text");
         const copy = row.createSpan({ cls: "pi-today-copy" });
         copy.createSpan({ cls: "pi-phone-today-label", text: item.text });
         copy.createSpan({ cls: "pi-phone-today-meta", text: waiting ? "正在保存…" : item.note });
+        setIcon(row.createSpan({ cls: "pi-phone-today-chevron", attr: { "aria-hidden": "true" } }), "chevron-right");
         row.setAttribute("aria-label", (waiting ? "正在保存：" : "完成待办：") + item.text);
         row.addEventListener("click", () => void this.complete(item));
       }
@@ -313,14 +327,14 @@ export class PhoneToday {
       this.activityError || this.activity?.partial ? "未能确认任务状态" : this.client.connected ? "正在读取任务状态…" : "待连接");
     body.scrollTop = scrollTop;
     if (focus) {
-      const current = [...body.querySelectorAll<HTMLElement>("[data-today-focus]")]
+      const current = [...body.querySelectorAll<HTMLElement | SVGElement>("[data-today-focus]")]
         .find((button) => button.dataset.todayFocus === focus && !button.matches(":disabled"));
       if (current && current.tagName === "H2") current.tabIndex = -1;
       (current ?? this.back)?.focus({ preventScroll: true });
     }
   }
 
-  private renderHero(body: HTMLElement) {
+  private renderHero(body: HTMLElement, selectedNode?: string) {
     const now = new Date();
     const day = this.todos?.date ? new Date(this.todos.date + "T12:00:00") : now;
     const hero = body.createDiv({ cls: "pi-phone-today-hero" });
@@ -337,20 +351,20 @@ export class PhoneToday {
     date.createSpan({ cls: "pi-phone-today-day-label", text: (day.getMonth() + 1) + "月 · " + week });
     date.createSpan({ cls: "pi-phone-today-day-number", text: String(day.getDate()).padStart(2, "0") });
     const art = top.createDiv({ cls: "pi-phone-today-hero-art", attr: { "aria-hidden": "true" } });
-    this.renderAvatar(art);
-    if (!art.hasChildNodes()) setIcon(art, "calendar-days");
+    art.createDiv({ cls: "pi-phone-today-hero-face" });
     const stats = hero.createDiv({ cls: "pi-phone-today-stats" });
     const groups = [
+      { kind: "results", label: "已完成", count: this.activity?.results.length },
       { kind: "tasks", label: "待办", count: this.todos?.total },
-      { kind: "results", label: "新结果", count: this.activity?.results.length },
       { kind: "running", label: "进行中", count: this.activity?.running.length },
     ];
     for (const { kind, label, count } of groups) {
       const metric = stats.createEl("button", { attr: { type: "button" } });
       metric.dataset.todayFocus = kind;
+      metric.dataset.kind = kind;
       metric.createSpan({ cls: "pi-phone-today-stat-number", text: count === undefined ? "–" : String(count) });
       metric.createSpan({ cls: "pi-phone-today-stat-label", text: label });
-      metric.setAttribute("aria-label", label + "，" + (count === undefined ? "等待读取" : count));
+      metric.setAttribute("aria-label", (kind === "results" ? "已完成的助手结果" : label) + "，" + (count === undefined ? "等待读取" : count));
       metric.addEventListener("click", () => {
         const target = body.querySelector<HTMLElement>('[data-kind="' + kind + '"] h2');
         if (!target) return;
@@ -359,6 +373,25 @@ export class PhoneToday {
         target.focus({ preventScroll: true });
       });
     }
+    const items: TodayTimelineItem[] = [];
+    for (const item of [...(this.activity?.results ?? [])].reverse()) {
+      const date = new Date(item.at);
+      items.push({
+        key: "result:" + item.conversationId + ":" + item.at, title: item.title,
+        status: "done", time: Number.isNaN(date.getTime()) ? undefined : formatTimelineTime.format(date),
+        icon: todayTimelineIcon(item.title),
+      });
+    }
+    for (const item of this.activity?.running ?? []) {
+      items.push({ key: "running:" + item.conversationId, title: item.title, status: "running", icon: "clock" });
+    }
+    for (const item of this.todos?.items ?? []) {
+      items.push({ key: "pending:" + item.id, title: item.text, status: "pending", icon: todayTimelineIcon(item.text) });
+    }
+    const emptyText = !this.client.connected ? "连接电脑后查看时间线" :
+      this.todosError || this.activityError || this.todos?.warnings || this.activity?.partial ? "部分事项未能读取" :
+      !this.activity || (this.client.description?.mobileTodayTodos && !this.todos) ? "正在读取今天的事项…" : "今天暂无事项";
+    this.timeline = renderTodayTimeline(hero, items, selectedNode, emptyText);
   }
 
   private row(parent: HTMLElement, title: string, detail: string, icon: string, key: string, open: () => void, enabled = true) {
@@ -381,6 +414,7 @@ export class PhoneToday {
     const body = this.body;
     if (!body) return;
     this.lastListTop = body.scrollTop;
+    this.clearTimeline();
     body.empty();
     body.scrollTop = 0;
     this.title?.setText("结果");

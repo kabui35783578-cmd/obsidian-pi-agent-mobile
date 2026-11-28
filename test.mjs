@@ -59,7 +59,23 @@ test("shipped stylesheet includes the current phone styles", async () => {
   const marker = "/* Phone companion (source: src/mobile/mobile.css). */";
   const styles = await fs.readFile("styles.css", "utf8");
   const phone = await fs.readFile("src/mobile/mobile.css", "utf8");
-  assert.equal(styles.slice(styles.indexOf(marker) + marker.length + 1), phone);
+  const shipped = styles.slice(styles.indexOf(marker) + marker.length + 1);
+  const font = await fs.readFile("src/mobile/assets/dm-sans-latin.woff2");
+  const license = (await fs.readFile("licenses/dm-sans-OFL.txt", "utf8")).trimEnd();
+  assert.ok(shipped.startsWith("/*\n" + license + "\n*/\n"));
+  const data = shipped.match(/data:font\/woff2;base64,([A-Za-z0-9+/=]+)/);
+  assert.ok(data);
+  assert.deepEqual(Buffer.from(data[1], "base64"), font);
+  assert.equal(shipped.slice(shipped.indexOf("*/\n") + 3)
+    .replace(data[0], "./assets/dm-sans-latin.woff2"), phone);
+});
+
+test("Today timeline titles fit one short line and preserve whole characters", async () => {
+  const { shortTodayTimelineTitle } = await import("./src/mobile/today-timeline.ts");
+  assert.equal(shortTodayTimelineTitle("小红书发布"), "小红书发布");
+  assert.equal(shortTodayTimelineTitle("**今天下班以后剪完门店宣传视频**"), "今天下班…");
+  assert.equal(shortTodayTimelineTitle("👩‍💻准备发布公告"), "👩‍💻准备发…");
+  assert.equal(shortTodayTimelineTitle(" "), "事项");
 });
 
 test("a saved streamed stage clears the mobile buffer before the next reply", async () => {

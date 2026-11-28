@@ -200,11 +200,7 @@ export class MobileChatView extends ItemView {
     this.today = new PhoneToday(el, this.app, this.plugin.client, (id) => {
       this.today?.close(false);
       void this.openConversation(id);
-    }, (path, agentId) => void this.readNote(path, agentId), (parent) => {
-      const manager = (this.plugin.client.description?.agents as AgentRecord[] | undefined)
-        ?.find((agent) => agent.role === "manager");
-      if (manager) this.avatars.render(parent, manager);
-    });
+    }, (path, agentId) => void this.readNote(path, agentId));
     this.header = el.createDiv({ cls: "pi-chat-header pi-phone-header" });
     this.statusEl = el.createDiv({
       cls: "pi-phone-connection",
