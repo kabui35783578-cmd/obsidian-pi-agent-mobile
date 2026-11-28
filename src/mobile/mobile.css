@@ -221,7 +221,6 @@ body.is-mobile.pi-phone-active .pi-phone-view .pi-phone-home-dock {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.22));
 }
 .pi-phone-view .pi-phone-identity .pi-agent-avatar.pi-eb-avatar::after {
   content: none;

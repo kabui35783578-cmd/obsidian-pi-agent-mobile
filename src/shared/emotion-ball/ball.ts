@@ -283,7 +283,6 @@ export function createBall(container: HTMLElement, opts: BallOptions = {}): Ball
   const head = el("path", {
     class: "pi-eb-head",
     d: ringPath(headRing),
-    fill: `url(#${id}-g)`,
     stroke: "none",
     "stroke-width": "2",
   });
@@ -544,11 +543,20 @@ export function createBall(container: HTMLElement, opts: BallOptions = {}): Ball
   }
 
   let curBodyColor: string | null = null;
-  let curSketch = -1;
+  let curSketch = false;
   let curLightOutline = false;
 
-  function syncBodyStroke(color: string, sketch: number) {
-    if (sketch > 0.5) {
+  function setBodyColor(color: string, sketch: boolean) {
+    if (color === curBodyColor && sketch === curSketch) return;
+    const sketchChanged = sketch !== curSketch;
+    if (color !== curBodyColor) {
+      stopA.setAttribute("stop-color", shade(color, 0.22));
+      stopB.setAttribute("stop-color", color);
+      stopC.setAttribute("stop-color", shade(color, -0.12));
+    }
+    curBodyColor = color;
+    curSketch = sketch;
+    if (sketch) {
       head.setAttribute("fill", "none");
       head.setAttribute("stroke", shade(color, -0.6));
       head.setAttribute("stroke-width", "2");
@@ -559,7 +567,7 @@ export function createBall(container: HTMLElement, opts: BallOptions = {}): Ball
     head.setAttribute("fill", `url(#${id}-g)`);
     head.removeAttribute("stroke-opacity");
     const lightOutline = relativeLuminance(color) > 0.82;
-    if (lightOutline !== curLightOutline || curSketch !== sketch) {
+    if (lightOutline !== curLightOutline || sketchChanged) {
       curLightOutline = lightOutline;
       if (lightOutline) {
         head.setAttribute("stroke", "rgba(26,26,26,0.12)");
@@ -569,15 +577,6 @@ export function createBall(container: HTMLElement, opts: BallOptions = {}): Ball
         head.setAttribute("stroke-width", "2");
       }
     }
-  }
-
-  function setBodyColor(color: string, sketch: number) {
-    if (color === curBodyColor) return;
-    curBodyColor = color;
-    stopA.setAttribute("stop-color", shade(color, 0.22));
-    stopB.setAttribute("stop-color", color);
-    stopC.setAttribute("stop-color", shade(color, -0.12));
-    syncBodyStroke(color, sketch);
   }
 
   function setEye(eye: EyeNodeState, pose: BallEyePose, k: 0 | 1, sketch: number, yaw: number) {
@@ -646,12 +645,7 @@ export function createBall(container: HTMLElement, opts: BallOptions = {}): Ball
         ` scale(${r2(b.scale)})` +
         ` translate(${r2(-HEAD_C)} ${r2(-HEAD_C)})`,
     );
-    setBodyColor(b.color, sketch);
-
-    if (sketch !== curSketch) {
-      curSketch = sketch;
-      syncBodyStroke(b.color, sketch);
-    }
+    setBodyColor(b.color, sketch > 0.5);
 
     const yaw = b.yaw || 0;
     setEye(eyeL, pose.left, 0, sketch, yaw);
